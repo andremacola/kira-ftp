@@ -162,6 +162,7 @@ export type KiraRPC = {
       recentHistory: { params: Record<string, never>; response: TransferHistoryEntry[] };
       pickDirectory: { params: Record<string, never>; response: string | null };
       pickFile: { params: Record<string, never>; response: string | null };
+      pickSftpConfig: { params: Record<string, never>; response: string | null };
     };
     messages: Record<string, never>;
   }>;

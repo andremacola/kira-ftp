@@ -28,6 +28,7 @@ export function ProjectDialog() {
   const [localPath, setLocalPath] = useState("");
   const [connectionId, setConnectionId] = useState<number | null>(null);
   const [remotePath, setRemotePath] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -35,6 +36,7 @@ export function ProjectDialog() {
       setLocalPath("");
       setConnectionId(connections[0]?.id ?? null);
       setRemotePath(connections[0]?.remotePath ?? "");
+      setError(null);
     }
   }, [open, connections]);
 
@@ -47,12 +49,19 @@ export function ProjectDialog() {
   };
 
   const importConfig = async () => {
-    const dir = await api.pickDirectory({});
-    if (!dir) return;
-    const project = await api.importSublimeConfig({ localPath: dir });
-    await Promise.all([refreshProjects(), useStore.getState().refreshConnections()]);
-    close();
-    await openProject(project);
+    setError(null);
+    const target = await api.pickSftpConfig({});
+    if (!target) return;
+    try {
+      const project = await api.importSublimeConfig({ localPath: target });
+      await Promise.all([refreshProjects(), useStore.getState().refreshConnections()]);
+      close();
+      await openProject(project);
+    } catch (e) {
+      setError(
+        `Could not import: ${(e as Error).message}. Pick the sftp-config.json file or the folder that contains it.`,
+      );
+    }
   };
 
   const create = async () => {
@@ -156,6 +165,12 @@ export function ProjectDialog() {
             <Input value={remotePath} onChange={(e) => setRemotePath(e.target.value)} placeholder="/var/www/html" />
           </div>
         </div>
+
+        {error && (
+          <div className="rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
+            {error}
+          </div>
+        )}
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={importConfig}>

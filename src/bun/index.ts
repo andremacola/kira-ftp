@@ -5,8 +5,8 @@
  */
 import { BrowserWindow, BrowserView } from "electrobun/bun";
 import { homedir } from "node:os";
-import { join, basename } from "node:path";
-import { readFileSync } from "node:fs";
+import { join, basename, dirname } from "node:path";
+import { readFileSync, statSync } from "node:fs";
 import { AppContext } from "../core/app-context";
 import { joinRemote } from "../core/connections/transport";
 import { rulesToRcloneFilters } from "../core/util/ignore";
@@ -184,8 +184,19 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
 
       /* config import + history + dialogs */
       importSublimeConfig: ({ localPath }) => {
-        const text = readFileSync(join(localPath, "sftp-config.json"), "utf-8");
-        const result = parseSublimeConfig(text, localPath);
+        // Accept either the project folder or the sftp-config.json file itself.
+        let dir = localPath;
+        let file = join(localPath, "sftp-config.json");
+        try {
+          if (statSync(localPath).isFile()) {
+            file = localPath;
+            dir = dirname(localPath);
+          }
+        } catch {
+          // leave defaults; readFileSync will throw a clear error if missing
+        }
+        const text = readFileSync(file, "utf-8");
+        const result = parseSublimeConfig(text, dir);
         // one transaction so a partial import can't leave orphaned rows
         return ctx.db.transaction(() => {
           const conn = ctx.connections.create(result.connection);
@@ -211,29 +222,37 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
         })();
       },
       recentHistory: () => ctx.history.recent(),
-      pickDirectory: () => pickPath(true),
-      pickFile: () => pickPath(false),
+      pickDirectory: () => pickPath({ directory: true }),
+      pickFile: () => pickPath({ file: true }),
+      // import accepts the .json file OR the folder that contains it
+      pickSftpConfig: () => pickPath({ file: true, directory: true, types: ["json"] }),
     },
     messages: {},
   },
 });
 
 /** Open a native file/folder picker; returns the first selection or null. */
-async function pickPath(directory: boolean): Promise<string | null> {
+async function pickPath(opts: {
+  file?: boolean;
+  directory?: boolean;
+  types?: string[];
+}): Promise<string | null> {
   try {
     const mod = (await import("electrobun/bun")) as unknown as {
       Utils?: {
-        openFileDialog?: (opts: {
+        openFileDialog?: (o: {
           canChooseFiles: boolean;
           canChooseDirectory: boolean;
           allowsMultipleSelection: boolean;
+          allowedFileTypes?: string[];
         }) => Promise<string[]>;
       };
     };
     const picked = await mod.Utils?.openFileDialog?.({
-      canChooseFiles: !directory,
-      canChooseDirectory: directory,
+      canChooseFiles: !!opts.file,
+      canChooseDirectory: !!opts.directory,
       allowsMultipleSelection: false,
+      allowedFileTypes: opts.types,
     });
     return picked && picked.length > 0 ? picked[0]! : null;
   } catch {
