@@ -225,7 +225,7 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
       pickDirectory: () => pickPath({ directory: true }),
       pickFile: () => pickPath({ file: true }),
       // import accepts the .json file OR the folder that contains it
-      pickSftpConfig: () => pickPath({ file: true, directory: true, types: ["json"] }),
+      pickSftpConfig: () => pickPath({ file: true, directory: true }),
     },
     messages: {},
   },
@@ -248,14 +248,24 @@ async function pickPath(opts: {
         }) => Promise<string[]>;
       };
     };
-    const picked = await mod.Utils?.openFileDialog?.({
+    // Only set allowedFileTypes when we actually have a filter — passing
+    // `undefined` makes the native dialog call fail (and silently not open).
+    const dialogOpts: {
+      canChooseFiles: boolean;
+      canChooseDirectory: boolean;
+      allowsMultipleSelection: boolean;
+      allowedFileTypes?: string[];
+    } = {
       canChooseFiles: !!opts.file,
       canChooseDirectory: !!opts.directory,
       allowsMultipleSelection: false,
-      allowedFileTypes: opts.types,
-    });
+    };
+    if (opts.types && opts.types.length > 0) dialogOpts.allowedFileTypes = opts.types;
+
+    const picked = await mod.Utils?.openFileDialog?.(dialogOpts);
     return picked && picked.length > 0 ? picked[0]! : null;
-  } catch {
+  } catch (err) {
+    console.error("openFileDialog failed:", err);
     return null;
   }
 }
