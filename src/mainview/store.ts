@@ -38,6 +38,7 @@ interface AppState {
 
   activeProject: Project | null;
   activeConnectionId: number | null;
+  activeEnvironmentId: number | null;
   remoteRoot: string;
 
   local: PaneState;
@@ -54,6 +55,7 @@ interface AppState {
   /* project activation */
   openProject: (project: Project) => Promise<void>;
   openConnectionOnly: (connection: Connection, localStart?: string) => Promise<void>;
+  switchEnvironment: (envId: number) => Promise<void>;
 
   /* navigation */
   navigate: (pane: Pane, path: string) => Promise<void>;
@@ -71,6 +73,7 @@ export const useStore = create<AppState>((set, get) => ({
   environments: [],
   activeProject: null,
   activeConnectionId: null,
+  activeEnvironmentId: null,
   remoteRoot: "",
   local: emptyPane(),
   remote: emptyPane(),
@@ -118,7 +121,7 @@ export const useStore = create<AppState>((set, get) => ({
       environments.find((e) => e.isDefault) ??
       environments[0];
     if (!env) {
-      set({ activeProject: project, environments });
+      set({ activeProject: project, environments, activeEnvironmentId: null });
       await get().navigate("local", project.localPath);
       return;
     }
@@ -126,6 +129,7 @@ export const useStore = create<AppState>((set, get) => ({
       activeProject: project,
       environments,
       activeConnectionId: env.connectionId,
+      activeEnvironmentId: env.id,
       remoteRoot: env.remotePath,
     });
     await Promise.all([
@@ -134,10 +138,22 @@ export const useStore = create<AppState>((set, get) => ({
     ]);
   },
 
+  switchEnvironment: async (envId) => {
+    const env = get().environments.find((e) => e.id === envId);
+    if (!env) return;
+    set({
+      activeEnvironmentId: env.id,
+      activeConnectionId: env.connectionId,
+      remoteRoot: env.remotePath,
+    });
+    await get().navigate("remote", env.remotePath || ".");
+  },
+
   openConnectionOnly: async (connection, localStart) => {
     set({
       activeProject: null,
       activeConnectionId: connection.id,
+      activeEnvironmentId: null,
       remoteRoot: connection.remotePath,
     });
     const home = localStart ?? (await api.homeDir({}));

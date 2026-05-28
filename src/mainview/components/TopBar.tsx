@@ -1,6 +1,7 @@
 import { Command, Settings, FolderSync, GitBranch, Eye, EyeOff } from "lucide-react";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { useStore } from "../store";
 import { useUi } from "../ui-store";
 import { api } from "../lib/rpc";
@@ -9,6 +10,9 @@ import { useEffect, useState } from "react";
 export function TopBar() {
   const activeProject = useStore((s) => s.activeProject);
   const activeConnectionId = useStore((s) => s.activeConnectionId);
+  const activeEnvironmentId = useStore((s) => s.activeEnvironmentId);
+  const environments = useStore((s) => s.environments);
+  const switchEnvironment = useStore((s) => s.switchEnvironment);
   const connections = useStore((s) => s.connections);
   const remoteRoot = useStore((s) => s.remoteRoot);
   const local = useStore((s) => s.local);
@@ -82,12 +86,29 @@ export function TopBar() {
       </div>
 
       {activeProject && (
-        <div className="ml-2 flex items-center gap-1 text-xs text-muted-foreground">
+        <div className="ml-2 flex items-center gap-2 text-xs text-muted-foreground">
           <span className="text-foreground">{activeProject.name}</span>
           {conn && (
             <span className="text-muted-foreground">
               · {conn.user}@{conn.host}
             </span>
+          )}
+          {environments.length > 1 && activeEnvironmentId !== null && (
+            <Select
+              value={activeEnvironmentId.toString()}
+              onValueChange={(v) => void switchEnvironment(Number(v))}
+            >
+              <SelectTrigger className="h-6 w-auto gap-1 px-2 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {environments.map((e) => (
+                  <SelectItem key={e.id} value={e.id.toString()}>
+                    {e.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
       )}

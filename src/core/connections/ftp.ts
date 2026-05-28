@@ -4,7 +4,6 @@
  * chmod is attempted via SITE CHMOD and may be unsupported on some servers.
  */
 import { Client, type FileInfo } from "basic-ftp";
-import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir as mkdirLocal } from "node:fs/promises";
 import { dirname } from "node:path";
 import { Readable, Writable } from "node:stream";
@@ -137,18 +136,13 @@ export class FtpTransport implements Transport {
     onProgress?: (bytes: number) => void,
   ): Promise<void> {
     await mkdirLocal(dirname(localPath), { recursive: true });
-    const ws = createWriteStream(localPath);
-    let bytes = 0;
-    const tracker = new Writable({
-      write(chunk: Buffer, _enc, cb) {
-        bytes += chunk.length;
-        onProgress?.(bytes);
-        ws.write(chunk, () => cb());
-      },
-    });
-    tracker.on("finish", () => ws.end());
-    await this.client.downloadTo(tracker, normalizeRemote(remotePath));
-    await new Promise<void>((resolve) => ws.on("close", () => resolve()));
+    // basic-ftp manages the stream; trackProgress avoids draining it ourselves.
+    if (onProgress) this.client.trackProgress((info) => onProgress(info.bytes));
+    try {
+      await this.client.downloadTo(localPath, normalizeRemote(remotePath));
+    } finally {
+      if (onProgress) this.client.trackProgress();
+    }
   }
 
   async upload(
@@ -158,13 +152,12 @@ export class FtpTransport implements Transport {
   ): Promise<void> {
     const target = normalizeRemote(remotePath);
     await this.ensureParent(target);
-    let bytes = 0;
-    const rs = createReadStream(localPath);
-    rs.on("data", (chunk: Buffer) => {
-      bytes += chunk.length;
-      onProgress?.(bytes);
-    });
-    await this.client.uploadFrom(rs, target);
+    if (onProgress) this.client.trackProgress((info) => onProgress(info.bytes));
+    try {
+      await this.client.uploadFrom(localPath, target);
+    } finally {
+      if (onProgress) this.client.trackProgress();
+    }
   }
 
   async readFile(remotePath: string): Promise<Buffer> {

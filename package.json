@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "electrobun build",
     "build:view": "vite build",
-    "dev": "electrobun dev",
-    "start": "electrobun start",
+    "build": "vite build && electrobun build",
+    "build:canary": "vite build && electrobun build --env=canary",
+    "build:stable": "vite build && electrobun build --env=stable",
+    "dev": "vite build && electrobun dev",
+    "dev:vite": "vite --port 5173",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

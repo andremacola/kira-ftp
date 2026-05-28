@@ -1,7 +1,11 @@
 /**
- * Connection pool keyed by connection id. Reuses one live Transport per
- * server (ref-counted), reconnecting transparently if the link dropped.
- * Fixes the "new connection per operation" mistake of the earlier attempt.
+ * Connection pool keyed by connection id. Keeps one live Transport per server
+ * and reconnects transparently when the link drops. A single in-flight connect
+ * is shared so concurrent callers never create duplicate connections.
+ *
+ * SFTP multiplexes many operations over one ssh2 connection, so those run
+ * concurrently. FTP/FTPS cannot share a control connection across simultaneous
+ * transfers, so operations on a single FTP connection are serialized.
  */
 import type { Connection } from "../../shared/domain";
 import { FtpTransport } from "./ftp";
@@ -14,63 +18,84 @@ export function createTransport(conn: Connection): Transport {
     : new FtpTransport(conn);
 }
 
-interface PoolEntry {
-  transport: Transport;
-  refs: number;
-}
-
 export class ConnectionPool {
-  private entries = new Map<number, PoolEntry>();
+  private transports = new Map<number, Transport>();
+  private connecting = new Map<number, Promise<Transport>>();
+  /** Per-connection serialization tail for non-multiplexing transports. */
+  private queues = new Map<number, Promise<unknown>>();
 
-  /** Acquire a live transport for a connection, connecting if needed. */
-  async acquire(conn: Connection): Promise<Transport> {
-    let entry = this.entries.get(conn.id);
-    if (entry && entry.transport.isAlive()) {
-      entry.refs++;
-      return entry.transport;
+  /** Get a live transport, sharing a single connect across concurrent calls. */
+  private getTransport(conn: Connection): Promise<Transport> {
+    const existing = this.transports.get(conn.id);
+    if (existing && existing.isAlive()) return Promise.resolve(existing);
+
+    const pending = this.connecting.get(conn.id);
+    if (pending) return pending;
+
+    const connect = (async () => {
+      if (existing) {
+        await this.safeDisconnect(existing);
+        this.transports.delete(conn.id);
+      }
+      const transport = createTransport(conn);
+      await transport.connect();
+      this.transports.set(conn.id, transport);
+      return transport;
+    })();
+    this.connecting.set(conn.id, connect);
+    try {
+      return connect;
+    } finally {
+      // clear the in-flight marker once it settles (success or failure)
+      void connect.finally(() => {
+        if (this.connecting.get(conn.id) === connect) this.connecting.delete(conn.id);
+      });
     }
-    // stale or missing -> (re)connect
-    if (entry) await this.safeDisconnect(entry.transport);
-    const transport = createTransport(conn);
-    await transport.connect();
-    entry = { transport, refs: 1 };
-    this.entries.set(conn.id, entry);
-    return transport;
   }
 
-  /** Release a previously acquired transport. */
-  release(connId: number): void {
-    const entry = this.entries.get(connId);
-    if (!entry) return;
-    entry.refs = Math.max(0, entry.refs - 1);
-  }
-
-  /** Run a unit of work with an acquired transport, releasing afterwards. */
+  /** Run work with a live transport. FTP is serialized; SFTP runs concurrently. */
   async withTransport<T>(
     conn: Connection,
     fn: (t: Transport) => Promise<T>,
   ): Promise<T> {
-    const transport = await this.acquire(conn);
-    try {
-      return await fn(transport);
-    } finally {
-      this.release(conn.id);
+    if (conn.type === "sftp") {
+      const transport = await this.getTransport(conn);
+      return fn(transport);
     }
+    // serialize FTP/FTPS ops on the same connection
+    const prev = this.queues.get(conn.id) ?? Promise.resolve();
+    const run = prev.then(async () => {
+      const transport = await this.getTransport(conn);
+      return fn(transport);
+    });
+    // keep the chain alive even if this op throws
+    this.queues.set(
+      conn.id,
+      run.then(
+        () => undefined,
+        () => undefined,
+      ),
+    );
+    return run;
   }
 
   /** Force-close a connection (e.g. user edited/removed it). */
   async close(connId: number): Promise<void> {
-    const entry = this.entries.get(connId);
-    if (!entry) return;
-    this.entries.delete(connId);
-    await this.safeDisconnect(entry.transport);
+    this.connecting.delete(connId);
+    this.queues.delete(connId);
+    const transport = this.transports.get(connId);
+    if (!transport) return;
+    this.transports.delete(connId);
+    await this.safeDisconnect(transport);
   }
 
   /** Close everything (app shutdown). */
   async closeAll(): Promise<void> {
-    const all = [...this.entries.values()];
-    this.entries.clear();
-    await Promise.all(all.map((e) => this.safeDisconnect(e.transport)));
+    const all = [...this.transports.values()];
+    this.transports.clear();
+    this.connecting.clear();
+    this.queues.clear();
+    await Promise.all(all.map((t) => this.safeDisconnect(t)));
   }
 
   private async safeDisconnect(t: Transport): Promise<void> {

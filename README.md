@@ -59,7 +59,24 @@ bun run typecheck    # tsc --noEmit
 `KIRA_RCLONE_PATH`). SQLite data lives in
 `~/Library/Application Support/kira-ftp/kira.sqlite`.
 
-## Status
+## Packaging (production)
 
-macOS (Apple Silicon) first. Secrets currently live in SQLite; migrating
-password/key storage to the macOS Keychain is a planned follow-up.
+- `bun run build:stable` builds a signed/notarized app when these env vars are
+  set: `ELECTROBUN_DEVELOPER_ID`, `ELECTROBUN_TEAMID`, `ELECTROBUN_APPLEID`,
+  `ELECTROBUN_APPLEIDPASS` (or the App Store Connect API key variants).
+- Bundle `rclone` for distribution: place an `rclone` arm64 binary next to the
+  packaged Bun executable (the app resolves it via `import.meta.dir`), or point
+  `KIRA_RCLONE_PATH` at it. Dev uses the `rclone` on `PATH`.
+
+## Status & known follow-ups
+
+macOS (Apple Silicon) first. Verified end-to-end against live SFTP (key auth)
+and FTP servers. Follow-ups:
+
+- **Secrets**: passwords currently live in SQLite; migrate to the macOS Keychain.
+- **Sync Both**: uses rclone `bisync` with a newest-wins resync baseline (safe,
+  no surprise deletions). True delete-propagating bisync state is not persisted.
+- **UI**: multi-select and drag-and-drop between panes are not yet implemented
+  (operations are per-item via context menu + command palette).
+- **Host keys**: SFTP currently does not pin known_hosts (TOFU). Add
+  known_hosts verification before shipping widely.

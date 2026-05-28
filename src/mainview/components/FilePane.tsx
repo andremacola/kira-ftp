@@ -12,6 +12,7 @@ import {
   Trash2,
   KeyRound,
   FileEdit,
+  FileDiff,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -116,6 +117,41 @@ export function FilePane({ pane }: { pane: Pane }) {
       },
     });
 
+  const diff = async (entry: FileEntry) => {
+    if (entry.type !== "file" || !canRemote) return;
+    if (isRemote) {
+      const localCounterpart = joinLocal(other.path, entry.name);
+      const [leftText, rightText] = await Promise.all([
+        api.readRemoteText({ connectionId: activeConnectionId!, remotePath: entry.path }),
+        api.readLocalText({ path: localCounterpart }).catch(() => ""),
+      ]);
+      ui.showDiff({
+        title: entry.name,
+        filename: entry.name,
+        leftLabel: `remote: ${entry.path}`,
+        leftText,
+        rightLabel: `local: ${localCounterpart}`,
+        rightText,
+      });
+    } else {
+      const remoteCounterpart = joinRemote(other.path, entry.name);
+      const [leftText, rightText] = await Promise.all([
+        api.readLocalText({ path: entry.path }),
+        api
+          .readRemoteText({ connectionId: activeConnectionId!, remotePath: remoteCounterpart })
+          .catch(() => ""),
+      ]);
+      ui.showDiff({
+        title: entry.name,
+        filename: entry.name,
+        leftLabel: `local: ${entry.path}`,
+        leftText,
+        rightLabel: `remote: ${remoteCounterpart}`,
+        rightText,
+      });
+    }
+  };
+
   const transfer = (entry: FileEntry) => {
     if (!canRemote) return;
     if (isRemote) {
@@ -209,6 +245,11 @@ export function FilePane({ pane }: { pane: Pane }) {
               {isRemote && entry.type === "file" && (
                 <ContextMenuItem onSelect={() => open(entry)}>
                   <FileEdit /> Edit
+                </ContextMenuItem>
+              )}
+              {entry.type === "file" && canRemote && (
+                <ContextMenuItem onSelect={() => void diff(entry)}>
+                  <FileDiff /> Diff {isRemote ? "with local" : "with remote"}
                 </ContextMenuItem>
               )}
               <ContextMenuSeparator />

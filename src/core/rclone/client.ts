@@ -5,7 +5,9 @@
  * rclone.conf. Passwords are obscured via the rclone CLI on demand.
  */
 import type { Subprocess } from "bun";
+import { existsSync } from "node:fs";
 import type { Connection } from "../../shared/domain";
+import { resolveKeyPath } from "../connections/keys";
 
 export interface RcloneStats {
   bytes: number;
@@ -21,9 +23,20 @@ export interface RcloneJob {
   jobid: number;
 }
 
-/** Locate the rclone binary: bundled (production) or system PATH (dev). */
+/**
+ * Locate the rclone binary. Order: explicit env override, a binary bundled in
+ * the app's Resources (production), then the system PATH (dev).
+ */
 function resolveRcloneBinary(): string {
-  return process.env.KIRA_RCLONE_PATH ?? "rclone";
+  if (process.env.KIRA_RCLONE_PATH) return process.env.KIRA_RCLONE_PATH;
+  // Electrobun copies extra resources next to the bun executable; check there.
+  try {
+    const bundled = `${import.meta.dir}/rclone`;
+    if (existsSync(bundled)) return bundled;
+  } catch {
+    /* import.meta.dir unavailable in some contexts */
+  }
+  return "rclone";
 }
 
 export class RcloneClient {
@@ -124,13 +137,15 @@ export class RcloneClient {
     const opts: string[] = [`host=${conn.host}`, `port=${conn.port}`, `user=${conn.user}`];
 
     if (conn.type === "sftp") {
-      if (conn.authType === "key" || (!conn.password && conn.sshKeyPath)) {
-        if (conn.sshKeyPath) opts.push(`key_file=${conn.sshKeyPath}`);
-        else opts.push("key_use_agent=true");
-      } else if (conn.authType === "agent") {
+      if (conn.authType === "agent") {
         opts.push("key_use_agent=true");
-      } else if (conn.password) {
+      } else if (conn.authType === "password" && conn.password) {
         opts.push(`pass=${await this.obscure(conn.password)}`);
+      } else {
+        // key auth: explicit path, else discovered ~/.ssh key, else agent
+        const keyPath = resolveKeyPath(conn.sshKeyPath);
+        if (keyPath) opts.push(`key_file=${keyPath}`);
+        else opts.push("key_use_agent=true");
       }
       const fs = `:sftp,${opts.join(",")}:`;
       return `${fs}${remotePath}`;
@@ -169,7 +184,11 @@ export class RcloneClient {
     return res.jobid;
   }
 
-  /** Start an async bidirectional bisync job. */
+  /**
+   * Start an async bidirectional bisync job. When `resync` is set we also pass
+   * `resyncMode: "newer"` so the baseline run keeps the newest version of each
+   * conflicting file instead of blindly favouring one side.
+   */
   async startBisync(params: {
     path1: string;
     path2: string;
@@ -181,7 +200,10 @@ export class RcloneClient {
       path2: params.path2,
       _async: true,
     };
-    if (params.resync) body.resync = true;
+    if (params.resync) {
+      body.resync = true;
+      body.resyncMode = "newer";
+    }
     if (params.filters && params.filters.length > 0) {
       body._filter = { ExcludeRule: params.filters };
     }

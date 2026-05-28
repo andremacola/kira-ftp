@@ -130,13 +130,17 @@ export class SyncService {
     });
   }
 
-  /** Start a two-way bisync job; resync seeds the baseline on first run. */
+  /**
+   * Start a two-way bisync job. Defaults to resync (newest-wins baseline) so it
+   * works on first run without a prior listing; this favours safety (no
+   * surprise deletions) over strict delete propagation.
+   */
   async runBoth(
     conn: Connection,
     localDir: string,
     remoteDir: string,
     opts: SyncOptions,
-    resync = false,
+    resync = true,
   ): Promise<number> {
     await this.rclone.ensureDaemon();
     const remoteFs = await this.rclone.buildFs(conn, remoteDir);

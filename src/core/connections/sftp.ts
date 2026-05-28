@@ -6,9 +6,7 @@
 import { Client, type SFTPWrapper, type ConnectConfig } from "ssh2";
 import { createReadStream, createWriteStream, readFileSync } from "node:fs";
 import { mkdir as mkdirLocal } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname } from "node:path";
-import { existsSync } from "node:fs";
 import type { Connection, FileEntry } from "../../shared/domain";
 import {
   type Transport,
@@ -16,19 +14,11 @@ import {
   joinRemote,
   normalizeRemote,
 } from "./transport";
-
-/** Candidate private keys to try when no explicit key is configured. */
-const DEFAULT_KEY_NAMES = ["id_ed25519", "id_ecdsa", "id_rsa"];
+import { resolveKeyPath } from "./keys";
 
 function resolvePrivateKey(conn: Connection): Buffer | undefined {
-  if (conn.sshKeyPath && existsSync(conn.sshKeyPath)) {
-    return readFileSync(conn.sshKeyPath);
-  }
-  for (const name of DEFAULT_KEY_NAMES) {
-    const p = `${homedir()}/.ssh/${name}`;
-    if (existsSync(p)) return readFileSync(p);
-  }
-  return undefined;
+  const path = resolveKeyPath(conn.sshKeyPath);
+  return path ? readFileSync(path) : undefined;
 }
 
 function entryType(longname: string, attrs: { mode: number }): FileEntry["type"] {
@@ -239,14 +229,14 @@ export class SftpTransport implements Transport {
     });
   }
 
-  download(
+  async download(
     remotePath: string,
     localPath: string,
     onProgress?: (bytes: number) => void,
   ): Promise<void> {
     const sftp = this.require();
-    return new Promise(async (resolve, reject) => {
-      await mkdirLocal(dirname(localPath), { recursive: true });
+    await mkdirLocal(dirname(localPath), { recursive: true });
+    await new Promise<void>((resolve, reject) => {
       const rs = sftp.createReadStream(normalizeRemote(remotePath));
       const ws = createWriteStream(localPath);
       let bytes = 0;

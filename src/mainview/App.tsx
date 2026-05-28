@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { Sidebar } from "./components/Sidebar";
 import { DualPane } from "./components/DualPane";
@@ -10,12 +10,21 @@ import { PromptDialog } from "./components/PromptDialog";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { SyncPreviewDialog } from "./components/SyncPreviewDialog";
 import { CommandPalette } from "./components/CommandPalette";
-import { RemoteEditor } from "./components/RemoteEditor";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { useUi } from "./ui-store";
 
+// CodeMirror is heavy; load the editor/diff only when first opened.
+const RemoteEditor = lazy(() =>
+  import("./components/RemoteEditor").then((m) => ({ default: m.RemoteEditor })),
+);
+const DiffDialog = lazy(() =>
+  import("./components/DiffDialog").then((m) => ({ default: m.DiffDialog })),
+);
+
 export default function App() {
   const toggleCommandPalette = useUi((s) => s.toggleCommandPalette);
+  const editorOpen = useUi((s) => s.editor !== null);
+  const diffOpen = useUi((s) => s.diff !== null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -45,7 +54,10 @@ export default function App() {
       <ConfirmDialog />
       <SyncPreviewDialog />
       <CommandPalette />
-      <RemoteEditor />
+      <Suspense fallback={null}>
+        {editorOpen && <RemoteEditor />}
+        {diffOpen && <DiffDialog />}
+      </Suspense>
       <SettingsDialog />
     </TooltipProvider>
   );

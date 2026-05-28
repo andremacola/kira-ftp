@@ -12,10 +12,12 @@ import { Switch } from "./ui/switch";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { useStore } from "../store";
 import { useUi } from "../ui-store";
 import { api } from "../lib/rpc";
-import type { IgnoreRule, Project } from "@shared/domain";
+import type { Environment, IgnoreRule, Project } from "@shared/domain";
 
 const TOGGLES: Array<{ key: keyof Project; label: string; hint: string }> = [
   { key: "uploadOnSave", label: "Upload on save", hint: "Auto-upload watched files when they change" },
@@ -31,18 +33,68 @@ export function SettingsDialog() {
   const open = useUi((s) => s.settingsOpen);
   const close = useUi((s) => s.closeSettings);
   const activeProject = useStore((s) => s.activeProject);
+  const connections = useStore((s) => s.connections);
   const refreshProjects = useStore((s) => s.refreshProjects);
+  const openProject = useStore((s) => s.openProject);
 
   const [project, setProject] = useState<Project | null>(null);
   const [rules, setRules] = useState<IgnoreRule[]>([]);
   const [newPattern, setNewPattern] = useState("");
+  const [envs, setEnvs] = useState<Environment[]>([]);
+  const [newEnvName, setNewEnvName] = useState("");
+  const [newEnvConn, setNewEnvConn] = useState<number | null>(null);
+  const [newEnvPath, setNewEnvPath] = useState("");
+
+  const reloadEnvs = (projectId: number) =>
+    api.listEnvironments({ projectId }).then(setEnvs);
 
   useEffect(() => {
     if (open && activeProject) {
       setProject(activeProject);
       void api.listIgnoreRules({ projectId: activeProject.id }).then(setRules);
+      void reloadEnvs(activeProject.id);
+      setNewEnvConn(connections[0]?.id ?? null);
     }
-  }, [open, activeProject]);
+  }, [open, activeProject, connections]);
+
+  const addEnv = async () => {
+    if (!project || !newEnvName.trim() || newEnvConn === null) return;
+    await api.createEnvironment({
+      input: {
+        projectId: project.id,
+        name: newEnvName.trim(),
+        connectionId: newEnvConn,
+        remotePath: newEnvPath,
+        isDefault: false,
+      },
+    });
+    setNewEnvName("");
+    setNewEnvPath("");
+    await reloadEnvs(project.id);
+  };
+
+  const removeEnv = async (id: number) => {
+    await api.deleteEnvironment({ id });
+    if (project) await reloadEnvs(project.id);
+  };
+
+  const makeDefault = async (env: Environment) => {
+    if (!project) return;
+    await api.updateEnvironment({ input: { ...env, isDefault: true }, id: env.id });
+    for (const other of envs) {
+      if (other.id !== env.id && other.isDefault) {
+        await api.updateEnvironment({ input: { ...other, isDefault: false }, id: other.id });
+      }
+    }
+    const updated = await api.updateProject({
+      id: project.id,
+      input: { ...project, defaultEnvironmentId: env.id },
+    });
+    setProject(updated);
+    await refreshProjects();
+    await reloadEnvs(project.id);
+    await openProject(updated);
+  };
 
   const save = async (next: Project) => {
     setProject(next);
@@ -78,6 +130,7 @@ export function SettingsDialog() {
             <TabsList>
               <TabsTrigger value="behavior">Behavior</TabsTrigger>
               <TabsTrigger value="permissions">Permissions</TabsTrigger>
+              <TabsTrigger value="environments">Environments</TabsTrigger>
               <TabsTrigger value="ignore">Ignore rules</TabsTrigger>
             </TabsList>
 
@@ -113,6 +166,70 @@ export function SettingsDialog() {
                   onChange={(e) => save({ ...project, dirPermissions: e.target.value || null })}
                 />
               </div>
+            </TabsContent>
+
+            <TabsContent value="environments" className="mt-3 grid gap-2">
+              <div className="max-h-40 overflow-y-auto rounded-md border border-border">
+                {envs.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-muted-foreground">
+                    No environments
+                  </div>
+                ) : (
+                  envs.map((e) => {
+                    const c = connections.find((x) => x.id === e.connectionId);
+                    return (
+                      <div
+                        key={e.id}
+                        className="flex items-center gap-2 border-b border-border/50 px-3 py-1.5 text-[12px] last:border-0"
+                      >
+                        <span className="font-medium">{e.name}</span>
+                        {e.isDefault && <Badge variant="secondary">default</Badge>}
+                        <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                          {c?.name ?? "?"} · {e.remotePath || "/"}
+                        </span>
+                        {!e.isDefault && (
+                          <Button variant="ghost" size="sm" onClick={() => void makeDefault(e)}>
+                            Set default
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="icon-sm" onClick={() => void removeEnv(e.id)}>
+                          <Trash2 />
+                        </Button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5">
+                <Input
+                  value={newEnvName}
+                  onChange={(ev) => setNewEnvName(ev.target.value)}
+                  placeholder="Name (e.g. staging)"
+                />
+                <Select
+                  value={newEnvConn?.toString() ?? ""}
+                  onValueChange={(v) => setNewEnvConn(Number(v))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Server" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {connections.map((c) => (
+                      <SelectItem key={c.id} value={c.id.toString()}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="icon" onClick={() => void addEnv()}>
+                  <Plus />
+                </Button>
+              </div>
+              <Input
+                value={newEnvPath}
+                onChange={(ev) => setNewEnvPath(ev.target.value)}
+                placeholder="Remote path for this environment"
+              />
             </TabsContent>
 
             <TabsContent value="ignore" className="mt-3 grid gap-2">

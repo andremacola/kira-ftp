@@ -32,6 +32,15 @@ interface EditorConfig {
   name: string;
 }
 
+interface DiffConfig {
+  title: string;
+  leftLabel: string;
+  rightLabel: string;
+  leftText: string;
+  rightText: string;
+  filename: string;
+}
+
 interface UiState {
   connectionDialog: { open: boolean; editing: Connection | null };
   projectDialog: boolean;
@@ -41,6 +50,7 @@ interface UiState {
   confirm: ConfirmConfig | null;
   syncPreview: SyncPreviewConfig | null;
   editor: EditorConfig | null;
+  diff: DiffConfig | null;
 
   openConnectionDialog: (editing?: Connection | null) => void;
   closeConnectionDialog: () => void;
@@ -57,6 +67,8 @@ interface UiState {
   closeSyncPreview: () => void;
   openEditor: (cfg: EditorConfig) => void;
   closeEditor: () => void;
+  showDiff: (cfg: DiffConfig) => void;
+  closeDiff: () => void;
 }
 
 export const useUi = create<UiState>((set) => ({
@@ -68,6 +80,7 @@ export const useUi = create<UiState>((set) => ({
   confirm: null,
   syncPreview: null,
   editor: null,
+  diff: null,
 
   openConnectionDialog: (editing = null) =>
     set({ connectionDialog: { open: true, editing } }),
@@ -86,4 +99,6 @@ export const useUi = create<UiState>((set) => ({
   closeSyncPreview: () => set({ syncPreview: null }),
   openEditor: (cfg) => set({ editor: cfg }),
   closeEditor: () => set({ editor: null }),
+  showDiff: (cfg) => set({ diff: cfg }),
+  closeDiff: () => set({ diff: null }),
 }));

@@ -9,6 +9,7 @@ import {
   GitBranch,
   Settings,
   FolderOpen,
+  FolderSync,
 } from "lucide-react";
 import { useStore } from "../store";
 import { useUi } from "../ui-store";
@@ -77,6 +78,27 @@ export function CommandPalette() {
                 </Item>
                 <Item onSelect={run(previewSync("down"))} icon={<ArrowDown />}>
                   Sync down (remote → local)
+                </Item>
+                <Item
+                  onSelect={run(() => {
+                    ui.showConfirm({
+                      title: "Sync both (bidirectional)",
+                      message:
+                        "Run a two-way sync (rclone bisync) between local and remote? Newer files win on each side.",
+                      onConfirm: async () => {
+                        await api.runSync({
+                          connectionId: store.activeConnectionId!,
+                          projectId: store.activeProject!.id,
+                          localDir: store.local.path,
+                          remoteDir: store.remote.path || store.remoteRoot,
+                          direction: "both",
+                        });
+                      },
+                    });
+                  })}
+                  icon={<FolderSync />}
+                >
+                  Sync both (bidirectional)
                 </Item>
                 <Item
                   onSelect={run(() => {
