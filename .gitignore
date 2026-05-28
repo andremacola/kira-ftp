@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+.bun/
+
+# Build output
+build/
+dist/
+artifacts/
+*.app
+*.dmg
+
+# Electrobun
+.electrobun/
+
+# Local data / spikes
+.spike/
+*.log
+
+# OS
+.DS_Store
+
+# Env / secrets
+.env
+.env.local
+
+# SQLite local dev db
+*.sqlite
+*.sqlite-journal
+*.db

@@ -1,0 +1,180 @@
+/**
+ * Typed RPC contract shared by the Bun main process and the React webview.
+ * Method names are flat camelCase identifiers (the RPC proxy resolves them by
+ * property access). Bun handles `requests`; the webview receives `messages`.
+ */
+import type { RPCSchema } from "electrobun/bun";
+import type {
+  Connection,
+  ConnectionInput,
+  ConnectionState,
+  ConnectionTestResult,
+  Environment,
+  EnvironmentInput,
+  FileEntry,
+  IgnoreRule,
+  LogLine,
+  Project,
+  ProjectInput,
+  SyncPlan,
+  TransferHistoryEntry,
+  TransferJob,
+} from "./domain";
+
+export type SyncDirectionRPC = "up" | "down" | "both";
+
+export type KiraRPC = {
+  bun: RPCSchema<{
+    requests: {
+      /* connections */
+      listConnections: { params: Record<string, never>; response: Connection[] };
+      getConnection: { params: { id: number }; response: Connection | null };
+      createConnection: { params: { input: ConnectionInput }; response: Connection };
+      updateConnection: {
+        params: { id: number; input: ConnectionInput };
+        response: Connection;
+      };
+      deleteConnection: { params: { id: number }; response: void };
+      testConnection: {
+        params: { input: ConnectionInput };
+        response: ConnectionTestResult;
+      };
+
+      /* projects */
+      listProjects: { params: Record<string, never>; response: Project[] };
+      getProject: { params: { id: number }; response: Project | null };
+      createProject: { params: { input: ProjectInput }; response: Project };
+      updateProject: { params: { id: number; input: ProjectInput }; response: Project };
+      deleteProject: { params: { id: number }; response: void };
+
+      /* environments */
+      listEnvironments: { params: { projectId: number }; response: Environment[] };
+      createEnvironment: { params: { input: EnvironmentInput }; response: Environment };
+      updateEnvironment: {
+        params: { id: number; input: EnvironmentInput };
+        response: Environment;
+      };
+      deleteEnvironment: { params: { id: number }; response: void };
+
+      /* ignore rules */
+      listIgnoreRules: { params: { projectId: number }; response: IgnoreRule[] };
+      createIgnoreRule: {
+        params: { projectId: number; pattern: string };
+        response: IgnoreRule;
+      };
+      deleteIgnoreRule: { params: { id: number }; response: void };
+
+      /* local filesystem */
+      listLocal: { params: { dir: string }; response: FileEntry[] };
+      statLocal: { params: { path: string }; response: FileEntry | null };
+      mkdirLocal: { params: { path: string }; response: void };
+      renameLocal: { params: { from: string; to: string }; response: void };
+      deleteLocal: { params: { path: string }; response: void };
+      homeDir: { params: Record<string, never>; response: string };
+
+      /* remote filesystem (by connection id) */
+      listRemote: { params: { connectionId: number; dir: string }; response: FileEntry[] };
+      statRemote: {
+        params: { connectionId: number; path: string };
+        response: FileEntry | null;
+      };
+      mkdirRemote: { params: { connectionId: number; path: string }; response: void };
+      renameRemote: {
+        params: { connectionId: number; from: string; to: string };
+        response: void;
+      };
+      deleteRemote: { params: { connectionId: number; path: string }; response: void };
+      chmodRemote: {
+        params: { connectionId: number; path: string; mode: number };
+        response: void;
+      };
+      newRemoteFile: { params: { connectionId: number; path: string }; response: void };
+
+      /* transfers */
+      uploadFile: {
+        params: { connectionId: number; localPath: string; remotePath: string };
+        response: TransferJob;
+      };
+      downloadFile: {
+        params: { connectionId: number; remotePath: string; localPath: string };
+        response: TransferJob;
+      };
+      uploadFolder: {
+        params: { connectionId: number; localDir: string; remoteDir: string; projectId?: number };
+        response: TransferJob;
+      };
+      downloadFolder: {
+        params: { connectionId: number; remoteDir: string; localDir: string; projectId?: number };
+        response: TransferJob;
+      };
+      listTransfers: { params: Record<string, never>; response: TransferJob[] };
+      cancelTransfer: { params: { jobId: string }; response: void };
+      clearFinishedTransfers: { params: Record<string, never>; response: void };
+
+      /* sync */
+      previewSync: {
+        params: {
+          connectionId: number;
+          projectId: number;
+          localDir: string;
+          remoteDir: string;
+          direction: "up" | "down";
+        };
+        response: SyncPlan;
+      };
+      runSync: {
+        params: {
+          connectionId: number;
+          projectId: number;
+          localDir: string;
+          remoteDir: string;
+          direction: SyncDirectionRPC;
+        };
+        response: TransferJob;
+      };
+
+      /* remote edit / diff */
+      readRemoteText: {
+        params: { connectionId: number; remotePath: string };
+        response: string;
+      };
+      saveRemoteText: {
+        params: { connectionId: number; remotePath: string; text: string };
+        response: void;
+      };
+      readLocalText: { params: { path: string }; response: string };
+
+      /* vcs */
+      vcsDetect: { params: { dir: string }; response: string | null };
+      vcsChanged: { params: { dir: string }; response: string[] };
+      vcsUploadChanged: {
+        params: { connectionId: number; localDir: string; remoteDir: string };
+        response: TransferJob[];
+      };
+
+      /* watch */
+      startWatch: { params: { projectId: number }; response: void };
+      stopWatch: { params: { projectId: number }; response: void };
+      watchStatus: { params: { projectId: number }; response: boolean };
+
+      /* config import + history + dialogs */
+      importSublimeConfig: { params: { localPath: string }; response: Project };
+      recentHistory: { params: Record<string, never>; response: TransferHistoryEntry[] };
+      pickDirectory: { params: Record<string, never>; response: string | null };
+      pickFile: { params: Record<string, never>; response: string | null };
+    };
+    messages: Record<string, never>;
+  }>;
+
+  webview: RPCSchema<{
+    requests: Record<string, never>;
+    messages: {
+      transferUpdate: TransferJob;
+      transferDone: TransferJob;
+      transferError: { jobId: string; error: string };
+      connectionState: { connectionId: number; state: ConnectionState };
+      watchEvent: { projectId: number; path: string; action: "upload" | "skip" };
+      log: LogLine;
+    };
+  }>;
+};
