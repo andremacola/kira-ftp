@@ -76,7 +76,9 @@ export function parseSublimeConfig(text: string, localPath: string): ImportResul
     host: cfg.host ?? "",
     port: pick(cfg.port, defaultPort),
     user: cfg.user ?? "",
-    authType: cfg.ssh_key_file ? "key" : cfg.password ? "password" : "key",
+    // FTP/FTPS only support password auth; key/agent are SFTP-only.
+    authType:
+      type !== "sftp" ? "password" : cfg.ssh_key_file ? "key" : cfg.password ? "password" : "key",
     sshKeyPath: cfg.ssh_key_file ?? null,
     password: cfg.password ?? null,
     remotePath: cfg.remote_path ?? "",

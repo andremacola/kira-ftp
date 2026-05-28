@@ -91,10 +91,22 @@ export const useStore = create<AppState>((set, get) => ({
         return { transfers };
       });
     });
+    const pushLog = (level: LogLine["level"], message: string) =>
+      set((s) => ({
+        logs: [...s.logs.slice(-499), { level, message, at: new Date().toISOString() }],
+      }));
+
     onMessage("transferDone", (job) => {
-      // refresh the remote pane after uploads complete
+      if (job.status !== "done") return;
       const st = get();
-      if (job.status === "done" && st.activeConnectionId) void st.refreshPane("remote");
+      const down = ["download", "download-folder", "sync-down", "sync-both"];
+      const up = ["upload", "upload-folder", "sync-up", "sync-both"];
+      if (down.includes(job.kind)) void st.refreshPane("local");
+      if (st.activeConnectionId && up.includes(job.kind)) void st.refreshPane("remote");
+    });
+    onMessage("transferError", (e) => pushLog("error", `Transfer failed: ${e.error}`));
+    onMessage("watchEvent", (e) => {
+      if (e.action === "upload") pushLog("info", `Watch: uploading ${e.path}`);
     });
     onMessage("log", (line: LogLine) => {
       set((s) => ({ logs: [...s.logs.slice(-499), line] }));

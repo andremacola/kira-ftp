@@ -4,7 +4,7 @@
  * existing ~/.ssh keys, else password, else ssh-agent.
  */
 import { Client, type SFTPWrapper, type ConnectConfig } from "ssh2";
-import { createReadStream, createWriteStream, readFileSync } from "node:fs";
+import { createReadStream, createWriteStream, readFileSync, rmSync } from "node:fs";
 import { mkdir as mkdirLocal } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Connection, FileEntry } from "../../shared/domain";
@@ -240,12 +240,18 @@ export class SftpTransport implements Transport {
       const rs = sftp.createReadStream(normalizeRemote(remotePath));
       const ws = createWriteStream(localPath);
       let bytes = 0;
+      const fail = (err: Error) => {
+        rs.destroy();
+        ws.destroy();
+        rmSync(localPath, { force: true }); // drop the partial file
+        reject(err);
+      };
       rs.on("data", (chunk: Buffer) => {
         bytes += chunk.length;
         onProgress?.(bytes);
       });
-      rs.on("error", reject);
-      ws.on("error", reject);
+      rs.on("error", fail);
+      ws.on("error", fail);
       ws.on("close", () => resolve());
       rs.pipe(ws);
     });
@@ -263,12 +269,17 @@ export class SftpTransport implements Transport {
       const rs = createReadStream(localPath);
       const ws = sftp.createWriteStream(target);
       let bytes = 0;
+      const fail = (err: Error) => {
+        rs.destroy();
+        ws.destroy();
+        reject(err);
+      };
       rs.on("data", (chunk: Buffer) => {
         bytes += chunk.length;
         onProgress?.(bytes);
       });
-      rs.on("error", reject);
-      ws.on("error", reject);
+      rs.on("error", fail);
+      ws.on("error", fail);
       ws.on("close", () => resolve());
       rs.pipe(ws);
     });

@@ -35,6 +35,7 @@ export class EventBus {
   emit<K extends keyof AppEvents>(event: K, payload: AppEvents[K]): void {
     const set = this.handlers.get(event);
     if (!set) return;
-    for (const h of set) (h as Handler<AppEvents[K]>)(payload);
+    // copy so a handler that unsubscribes during emit can't break iteration
+    for (const h of [...set]) (h as Handler<AppEvents[K]>)(payload);
   }
 }

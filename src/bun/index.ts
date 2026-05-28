@@ -186,26 +186,29 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
       importSublimeConfig: ({ localPath }) => {
         const text = readFileSync(join(localPath, "sftp-config.json"), "utf-8");
         const result = parseSublimeConfig(text, localPath);
-        const conn = ctx.connections.create(result.connection);
-        const project = ctx.projects.create({
-          ...result.project,
-          defaultEnvironmentId: null,
-        });
-        const env = ctx.environments.create({
-          projectId: project.id,
-          name: "default",
-          connectionId: conn.id,
-          remotePath: result.remotePath,
-          isDefault: true,
-        });
-        const updated = ctx.projects.update(project.id, {
-          ...result.project,
-          defaultEnvironmentId: env.id,
-        });
-        for (const pattern of result.ignorePatterns) {
-          ctx.ignoreRules.create(project.id, pattern);
-        }
-        return updated;
+        // one transaction so a partial import can't leave orphaned rows
+        return ctx.db.transaction(() => {
+          const conn = ctx.connections.create(result.connection);
+          const project = ctx.projects.create({
+            ...result.project,
+            defaultEnvironmentId: null,
+          });
+          const env = ctx.environments.create({
+            projectId: project.id,
+            name: "default",
+            connectionId: conn.id,
+            remotePath: result.remotePath,
+            isDefault: true,
+          });
+          const updated = ctx.projects.update(project.id, {
+            ...result.project,
+            defaultEnvironmentId: env.id,
+          });
+          for (const pattern of result.ignorePatterns) {
+            ctx.ignoreRules.create(project.id, pattern);
+          }
+          return updated;
+        })();
       },
       recentHistory: () => ctx.history.recent(),
       pickDirectory: () => pickPath(true),
@@ -268,8 +271,19 @@ if (channel) {
   ctx.bus.on("log", (l) => channel.send.log(l));
 }
 
+// Graceful shutdown: signals can await async cleanup; the bare exit handler
+// can only run sync work, so it just kills the rclone daemon to avoid orphans.
+let shuttingDown = false;
+async function gracefulShutdown(): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  await ctx.shutdown();
+}
+process.on("SIGINT", () => void gracefulShutdown().finally(() => process.exit(0)));
+process.on("SIGTERM", () => void gracefulShutdown().finally(() => process.exit(0)));
 process.on("exit", () => {
-  void ctx.shutdown();
+  ctx.watcher.stopAll();
+  ctx.rclone.killSync();
 });
 
 console.log("Kira FTP main process started");

@@ -47,7 +47,7 @@ export class TransferManager {
     label: string,
   ): TransferJob {
     const job: TransferJob = {
-      id: `job-${++this.seq}-${this.seq}`,
+      id: `job-${++this.seq}`,
       projectId: project?.id ?? null,
       connectionId: conn.id,
       kind,

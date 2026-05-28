@@ -6,8 +6,23 @@
  */
 import type { Subprocess } from "bun";
 import { existsSync } from "node:fs";
+import { createServer } from "node:net";
 import type { Connection } from "../../shared/domain";
 import { resolveKeyPath } from "../connections/keys";
+
+/** Ask the OS for a free localhost TCP port. */
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const srv = createServer();
+    srv.unref();
+    srv.on("error", reject);
+    srv.listen(0, "127.0.0.1", () => {
+      const addr = srv.address();
+      const port = typeof addr === "object" && addr ? addr.port : 0;
+      srv.close(() => resolve(port));
+    });
+  });
+}
 
 export interface RcloneStats {
   bytes: number;
@@ -50,7 +65,7 @@ export class RcloneClient {
   async ensureDaemon(): Promise<void> {
     if (this.proc && this.proc.exitCode === null) return;
 
-    const port = 5572 + Math.floor((Date.now() % 2000));
+    const port = await freePort();
     this.addr = `127.0.0.1:${port}`;
     this.pass = crypto.randomUUID();
 
@@ -69,7 +84,14 @@ export class RcloneClient {
       { stdout: "pipe", stderr: "pipe" },
     );
 
-    await this.waitReady();
+    try {
+      await this.waitReady();
+    } catch (err) {
+      // don't leave an orphaned daemon if it never became ready
+      this.proc.kill();
+      this.proc = null;
+      throw err;
+    }
   }
 
   private async waitReady(timeoutMs = 10000): Promise<void> {
@@ -97,6 +119,12 @@ export class RcloneClient {
     }
   }
 
+  /** Synchronously kill the daemon (for non-awaitable exit handlers). */
+  killSync(): void {
+    this.proc?.kill();
+    this.proc = null;
+  }
+
   /** Low-level RC call. */
   async call<T = unknown>(method: string, params: unknown): Promise<T> {
     const res = await fetch(`http://${this.addr}/${method}`, {
@@ -115,14 +143,19 @@ export class RcloneClient {
     return (await res.json()) as T;
   }
 
-  /** Obscure a plaintext password (cached). */
+  /** Obscure a plaintext password (cached). Passes via stdin, not argv. */
   private async obscure(plain: string): Promise<string> {
     const cached = this.obscureCache.get(plain);
     if (cached) return cached;
-    const proc = Bun.spawn([resolveRcloneBinary(), "obscure", plain], {
+    // "obscure -" reads from stdin so the secret never appears in `ps`.
+    const proc = Bun.spawn([resolveRcloneBinary(), "obscure", "-"], {
+      stdin: "pipe",
       stdout: "pipe",
     });
+    proc.stdin.write(plain);
+    await proc.stdin.end();
     const out = (await new Response(proc.stdout).text()).trim();
+    await proc.exited;
     this.obscureCache.set(plain, out);
     return out;
   }

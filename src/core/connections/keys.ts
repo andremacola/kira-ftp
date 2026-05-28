@@ -17,8 +17,12 @@ export function defaultKeyPath(): string | null {
   return null;
 }
 
-/** Resolve an explicit key path if it exists, else a default ~/.ssh key. */
+/**
+ * Resolve a key path. With no explicit path, auto-discover a ~/.ssh key. If an
+ * explicit path is given but missing, return null (let auth fail clearly rather
+ * than silently connecting with a different identity).
+ */
 export function resolveKeyPath(explicit: string | null): string | null {
-  if (explicit && existsSync(explicit)) return explicit;
+  if (explicit) return existsSync(explicit) ? explicit : null;
   return defaultKeyPath();
 }

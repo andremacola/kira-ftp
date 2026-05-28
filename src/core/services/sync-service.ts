@@ -91,7 +91,8 @@ export class SyncService {
       } else if (s.modMs - d.modMs > MTIME_TOLERANCE_MS) {
         items.push({ action, path, size: s.size, reason: "newer" });
         totalBytes += s.size;
-      } else if (opts.sameAge && s.modMs !== d.modMs) {
+      } else if (opts.sameAge && Math.abs(s.modMs - d.modMs) <= MTIME_TOLERANCE_MS) {
+        // same-age override: transfer even when timestamps match
         items.push({ action, path, size: s.size, reason: "newer" });
         totalBytes += s.size;
       }

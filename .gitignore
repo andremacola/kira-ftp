@@ -27,3 +27,6 @@ artifacts/
 *.sqlite
 *.sqlite-journal
 *.db
+
+# Chat exports
+docs/agent-sessions/*.txt
