@@ -3,7 +3,7 @@
  * Kept separate from the data store so re-renders stay localized.
  */
 import { create } from "zustand";
-import type { Connection, SyncPlan } from "@shared/domain";
+import type { SyncPlan } from "@shared/domain";
 
 interface PromptConfig {
   title: string;
@@ -42,7 +42,6 @@ interface DiffConfig {
 }
 
 interface UiState {
-  connectionDialog: { open: boolean; editing: Connection | null };
   projectDialog: boolean;
   commandPalette: boolean;
   projectSettingsOpen: boolean;
@@ -53,8 +52,6 @@ interface UiState {
   editor: EditorConfig | null;
   diff: DiffConfig | null;
 
-  openConnectionDialog: (editing?: Connection | null) => void;
-  closeConnectionDialog: () => void;
   openProjectDialog: () => void;
   closeProjectDialog: () => void;
   toggleCommandPalette: (open?: boolean) => void;
@@ -75,7 +72,6 @@ interface UiState {
 }
 
 export const useUi = create<UiState>((set) => ({
-  connectionDialog: { open: false, editing: null },
   projectDialog: false,
   commandPalette: false,
   projectSettingsOpen: false,
@@ -86,9 +82,6 @@ export const useUi = create<UiState>((set) => ({
   editor: null,
   diff: null,
 
-  openConnectionDialog: (editing = null) =>
-    set({ connectionDialog: { open: true, editing } }),
-  closeConnectionDialog: () => set({ connectionDialog: { open: false, editing: null } }),
   openProjectDialog: () => set({ projectDialog: true }),
   closeProjectDialog: () => set({ projectDialog: false }),
   toggleCommandPalette: (open) =>

@@ -75,8 +75,6 @@ interface AppState {
   refreshProjects: () => Promise<void>;
 
   openProject: (project: Project) => Promise<void>;
-  openConnectionOnly: (connection: Connection, localStart?: string) => Promise<void>;
-  switchEnvironment: (envId: number) => Promise<void>;
 
   /** Enter a directory entry (mapped: mirror both panes; free: that pane). */
   enter: (pane: Pane, entry: FileEntry) => Promise<void>;
@@ -188,36 +186,6 @@ export const useStore = create<AppState>((set, get) => ({
       relPath: "",
     });
     await get().refreshBoth();
-  },
-
-  switchEnvironment: async (envId) => {
-    const env = get().environments.find((e) => e.id === envId);
-    if (!env) return;
-    set({
-      activeEnvironmentId: env.id,
-      activeConnectionId: env.connectionId,
-      remoteRoot: env.remotePath || "/",
-      relPath: "",
-    });
-    await get().refreshBoth();
-  },
-
-  openConnectionOnly: async (connection, localStart) => {
-    set({
-      activeProject: null,
-      activeConnectionId: connection.id,
-      activeConnection: connection,
-      activeEnvironmentId: null,
-      mapped: false,
-      localRoot: "",
-      remoteRoot: connection.remotePath,
-      relPath: "",
-    });
-    const home = localStart ?? (await api.homeDir({}));
-    await Promise.all([
-      get().navigate("local", home),
-      get().navigate("remote", connection.remotePath || "."),
-    ]);
   },
 
   enter: async (pane, entry) => {
