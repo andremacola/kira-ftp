@@ -47,6 +47,7 @@ export class MenubarManager {
       // a bare icon click has an empty action. Dispatch accordingly.
       this.tray.on("tray-clicked", (e) => {
         const action = (e as { action?: string } | undefined)?.action;
+        console.log("[tray] clicked, action =", JSON.stringify(action));
         if (action === "quit") this.onQuit();
         else if (action === "rmate-toggle") {
           this.ctx.rmate.setEnabled(!this.ctx.rmate.isRunning());

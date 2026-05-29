@@ -135,7 +135,7 @@ export function GlobalSettingsDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
-      <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>Application-wide preferences.</DialogDescription>
@@ -230,9 +230,9 @@ export function GlobalSettingsDialog() {
                 {cli.path}
               </p>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <Select value={cliTarget} onValueChange={setCliTarget}>
-                <SelectTrigger className="h-8 w-44">
+                <SelectTrigger className="h-8 w-44 shrink-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -244,7 +244,7 @@ export function GlobalSettingsDialog() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="sm" onClick={() => void installCli()}>
+              <Button variant="outline" size="sm" className="shrink-0" onClick={() => void installCli()}>
                 {cli.installed ? "Reinstall" : "Install"}
               </Button>
               {cliMsg && (
