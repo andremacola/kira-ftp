@@ -228,8 +228,12 @@ export type KiraRPC = {
         params: Record<string, never>;
         response: { installed: boolean; path: string | null };
       };
-      installCli: {
+      cliTargets: {
         params: Record<string, never>;
+        response: Array<{ id: string; dir: string; label: string; needsSudo: boolean }>;
+      };
+      installCli: {
+        params: { target: string };
         response: { ok: boolean; cancelled?: boolean; message: string };
       };
       pickDirectory: { params: Record<string, never>; response: string | null };

@@ -10,7 +10,7 @@
  * - Zed: keymap bindings + global tasks — fully wired.
  * - Sublime: a plugin file + keymap in Packages/User.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseJsoncArray } from "../util/jsonc";
@@ -68,6 +68,9 @@ export interface CliStatus {
   path: string | null;
 }
 
+/** Where to install the CLI. Both dirs are typically on PATH. */
+export type CliTargetId = "local" | "usr-local";
+
 export class EditorIntegrationService {
   private home: string;
   private cliLoc: CliLocation;
@@ -90,26 +93,64 @@ export class EditorIntegrationService {
     return { installed: path !== null && existsSync(path), path };
   }
 
+  /** The two well-known install destinations (both on a typical PATH). */
+  cliTargets(): Array<{ id: CliTargetId; dir: string; label: string; needsSudo: boolean }> {
+    return [
+      {
+        id: "local",
+        dir: join(this.home, ".local/bin"),
+        label: "~/.local/bin",
+        needsSudo: false,
+      },
+      { id: "usr-local", dir: "/usr/local/bin", label: "/usr/local/bin", needsSudo: true },
+    ];
+  }
+
+  private cliScript(): string {
+    return CLI_SCRIPT.replace("__DATA_DIR__", this.appDataDir());
+  }
+
   /**
-   * Install the `kira-ftp` CLI as a tiny shell script (curl-based) into `dir`.
-   * No build step, no 63MB binary: it reads the port/token files the app
-   * publishes and POSTs to the control server.
+   * Install the `kira-ftp` CLI (a tiny curl-based shell script) into one of the
+   * known bin dirs. `/usr/local/bin` is root-owned, so that path is written via
+   * an osascript admin prompt; `~/.local/bin` needs no privileges.
    */
-  installCli(dir: string): InstallResult {
-    const target = join(dir, "kira-ftp");
+  async installCli(targetId: CliTargetId): Promise<InstallResult> {
+    const t = this.cliTargets().find((x) => x.id === targetId);
+    if (!t) return { ok: false, alreadyInstalled: false, message: "Unknown target" };
+    const target = join(t.dir, "kira-ftp");
     try {
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(target, CLI_SCRIPT.replace("__DATA_DIR__", this.appDataDir()), {
-        mode: 0o755,
-      });
+      if (t.needsSudo) {
+        await this.installWithAdmin(t.dir, target);
+      } else {
+        mkdirSync(t.dir, { recursive: true });
+        writeFileSync(target, this.cliScript(), { mode: 0o755 });
+      }
       this.cliLoc.set(target);
-      return {
-        ok: true,
-        alreadyInstalled: false,
-        message: `Installed to ${target}`,
-      };
+      return { ok: true, alreadyInstalled: false, message: `Installed to ${target}` };
     } catch (e) {
       return { ok: false, alreadyInstalled: false, message: (e as Error).message };
+    }
+  }
+
+  /** Write the script to a privileged dir via a macOS admin (sudo) prompt. */
+  private async installWithAdmin(dir: string, target: string): Promise<void> {
+    // Stage the script in a temp file, then move it into place + chmod as admin.
+    const staged = join(this.appDataDir(), "kira-ftp.staged");
+    mkdirSync(this.appDataDir(), { recursive: true });
+    writeFileSync(staged, this.cliScript(), { mode: 0o755 });
+    const sh = `mkdir -p '${dir}' && cp '${staged}' '${target}' && chmod 755 '${target}'`;
+    const osa = `do shell script "${sh.replace(/"/g, '\\"')}" with administrator privileges`;
+    const proc = Bun.spawn(["osascript", "-e", osa], { stdout: "pipe", stderr: "pipe" });
+    const code = await proc.exited;
+    try {
+      rmSync(staged, { force: true });
+    } catch {
+      /* ignore */
+    }
+    if (code !== 0) {
+      const err = (await new Response(proc.stderr).text()).trim();
+      throw new Error(err.includes("-128") ? "Cancelled" : err || "Admin install failed");
     }
   }
 

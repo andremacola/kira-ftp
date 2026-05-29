@@ -236,11 +236,13 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
       installEditorIntegration: ({ id }) =>
         ctx.editors.install(id as Parameters<typeof ctx.editors.install>[0]),
       cliStatus: () => ctx.editors.cliStatus(),
-      installCli: async () => {
-        const dir = await pickPath({ directory: true });
-        if (!dir) return { ok: false, cancelled: true, message: "Cancelled" };
-        const r = ctx.editors.installCli(dir);
-        return { ok: r.ok, message: r.message };
+      cliTargets: () => ctx.editors.cliTargets(),
+      installCli: async ({ target }) => {
+        const r = await ctx.editors.installCli(
+          target as Parameters<typeof ctx.editors.installCli>[0],
+        );
+        const cancelled = !r.ok && /cancel/i.test(r.message);
+        return { ok: r.ok, cancelled, message: r.message };
       },
       setControlPort: ({ port }) => {
         if (!Number.isInteger(port) || port < 1024 || port > 65535) {

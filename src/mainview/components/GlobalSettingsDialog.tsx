@@ -11,6 +11,7 @@ import { Switch } from "./ui/switch";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Button } from "./ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { useUi } from "../ui-store";
 import { api } from "../lib/rpc";
 
@@ -38,6 +39,10 @@ export function GlobalSettingsDialog() {
     installed: false,
     path: null,
   });
+  const [cliTargets, setCliTargets] = useState<
+    Array<{ id: string; dir: string; label: string; needsSudo: boolean }>
+  >([]);
+  const [cliTarget, setCliTarget] = useState("local");
   const [cliMsg, setCliMsg] = useState<string | null>(null);
 
   const refreshStatus = () => api.getControlStatus({}).then(setStatus);
@@ -52,6 +57,7 @@ export function GlobalSettingsDialog() {
     void refreshStatus();
     void refreshEditors();
     void refreshCli();
+    void api.cliTargets({}).then(setCliTargets);
     setEditorMsg({});
     setCliMsg(null);
     setPortError(null);
@@ -61,8 +67,11 @@ export function GlobalSettingsDialog() {
   const installCli = async () => {
     setCliMsg(null);
     try {
-      const res = await api.installCli({});
-      if (res.cancelled) return;
+      const res = await api.installCli({ target: cliTarget });
+      if (res.cancelled) {
+        setCliMsg("Cancelled");
+        return;
+      }
       setCliMsg(res.message);
       await Promise.all([refreshCli(), refreshEditors()]);
     } catch (e) {
@@ -193,7 +202,7 @@ export function GlobalSettingsDialog() {
             </div>
             <p className="mb-2 text-[11px] text-muted-foreground">
               A small <code>kira-ftp</code> script editors call to upload/download/sync the
-              current file. Pick a folder on your PATH (e.g. <code>~/.local/bin</code>).
+              current file. Choose where to install it (both are on your PATH).
             </p>
             {cli.installed && cli.path && (
               <p className="mb-1.5 truncate font-mono text-[11px] text-muted-foreground" title={cli.path}>
@@ -201,8 +210,21 @@ export function GlobalSettingsDialog() {
               </p>
             )}
             <div className="flex items-center gap-2">
+              <Select value={cliTarget} onValueChange={setCliTarget}>
+                <SelectTrigger className="h-8 w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {cliTargets.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.label}
+                      {t.needsSudo ? " (admin)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button variant="outline" size="sm" onClick={() => void installCli()}>
-                {cli.installed ? "Reinstall / move…" : "Install CLI…"}
+                {cli.installed ? "Reinstall" : "Install"}
               </Button>
               {cliMsg && (
                 <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground" title={cliMsg}>
