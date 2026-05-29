@@ -23,6 +23,11 @@ export interface Connection {
   sshKeyPath: string | null;
   /** Plaintext password (step 1 only; migrates to Keychain later). */
   password: string | null;
+  /**
+   * Owning project id, or null for a standalone server. Project-owned
+   * connections are edited inside the project and hidden from the Servers list.
+   */
+  ownerProjectId: number | null;
   /** Default remote directory to open. */
   remotePath: string;
   remoteEncoding: string;
@@ -40,6 +45,9 @@ export interface Connection {
 
 /** Payload for creating/updating a connection (no server-managed fields). */
 export type ConnectionInput = Omit<Connection, "id" | "createdAt" | "updatedAt">;
+
+/** Connection fields without ownership (ownership is decided by the backend). */
+export type ConnectionFields = Omit<ConnectionInput, "ownerProjectId">;
 
 /** A local<->remote mapping (the "project" / sftp-config concept). */
 export interface Project {

@@ -6,6 +6,7 @@
 import type { RPCSchema } from "electrobun/bun";
 import type {
   Connection,
+  ConnectionFields,
   ConnectionInput,
   ConnectionState,
   ConnectionTestResult,
@@ -36,7 +37,7 @@ export type KiraRPC = {
       };
       deleteConnection: { params: { id: number }; response: void };
       testConnection: {
-        params: { input: ConnectionInput };
+        params: { input: ConnectionFields };
         response: ConnectionTestResult;
       };
 
@@ -46,6 +47,16 @@ export type KiraRPC = {
       createProject: { params: { input: ProjectInput }; response: Project };
       updateProject: { params: { id: number; input: ProjectInput }; response: Project };
       deleteProject: { params: { id: number }; response: void };
+      /** Create a self-contained project: project + its own connection + default env. */
+      createFullProject: {
+        params: {
+          name: string;
+          localPath: string;
+          remotePath: string;
+          connection: ConnectionFields;
+        };
+        response: Project;
+      };
 
       /* environments */
       listEnvironments: { params: { projectId: number }; response: Environment[] };
@@ -55,6 +66,30 @@ export type KiraRPC = {
         response: Environment;
       };
       deleteEnvironment: { params: { id: number }; response: void };
+      /** Add an environment that owns its own connection. */
+      addEnvironment: {
+        params: {
+          projectId: number;
+          name: string;
+          isDefault: boolean;
+          remotePath: string;
+          connection: ConnectionFields;
+        };
+        response: Environment;
+      };
+      /** Update an environment and its owned connection together. */
+      updateEnvironmentFull: {
+        params: {
+          environmentId: number;
+          name: string;
+          isDefault: boolean;
+          remotePath: string;
+          connection: ConnectionFields;
+        };
+        response: Environment;
+      };
+      /** Delete an environment and its owned connection. */
+      deleteEnvironmentFull: { params: { id: number }; response: void };
 
       /* ignore rules */
       listIgnoreRules: { params: { projectId: number }; response: IgnoreRule[] };

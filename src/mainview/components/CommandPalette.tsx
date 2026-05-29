@@ -66,9 +66,6 @@ export function CommandPalette() {
               <Item onSelect={run(() => ui.openProjectDialog())} icon={<FolderGit2 />}>
                 New project
               </Item>
-              <Item onSelect={run(() => ui.openConnectionDialog(null))} icon={<Server />}>
-                New server
-              </Item>
             </Group>
 
             {hasContext && (

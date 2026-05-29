@@ -55,6 +55,7 @@ interface AppState {
 
   activeProject: Project | null;
   activeConnectionId: number | null;
+  activeConnection: Connection | null;
   activeEnvironmentId: number | null;
 
   /** Project mapping. mapped === true means panes are root-locked + mirrored. */
@@ -97,6 +98,7 @@ export const useStore = create<AppState>((set, get) => ({
   environments: [],
   activeProject: null,
   activeConnectionId: null,
+  activeConnection: null,
   activeEnvironmentId: null,
   mapped: false,
   localRoot: "",
@@ -163,6 +165,8 @@ export const useStore = create<AppState>((set, get) => ({
       set({
         activeProject: project,
         environments,
+        activeConnectionId: null,
+        activeConnection: null,
         activeEnvironmentId: null,
         mapped: false,
         localRoot: project.localPath,
@@ -171,10 +175,12 @@ export const useStore = create<AppState>((set, get) => ({
       await get().navigate("local", project.localPath);
       return;
     }
+    const connection = await api.getConnection({ id: env.connectionId });
     set({
       activeProject: project,
       environments,
       activeConnectionId: env.connectionId,
+      activeConnection: connection,
       activeEnvironmentId: env.id,
       mapped: true,
       localRoot: project.localPath,
@@ -200,6 +206,7 @@ export const useStore = create<AppState>((set, get) => ({
     set({
       activeProject: null,
       activeConnectionId: connection.id,
+      activeConnection: connection,
       activeEnvironmentId: null,
       mapped: false,
       localRoot: "",

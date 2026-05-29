@@ -4,6 +4,7 @@
  */
 import type {
   Connection,
+  ConnectionFields,
   ConnectionInput,
   ConnectionTestResult,
 } from "../../shared/domain";
@@ -42,10 +43,11 @@ export class ConnectionService {
   }
 
   /** Connect with the given (possibly unsaved) config and verify access. */
-  async test(input: ConnectionInput): Promise<ConnectionTestResult> {
+  async test(input: ConnectionFields): Promise<ConnectionTestResult> {
     const conn: Connection = {
       ...input,
       id: -1,
+      ownerProjectId: null,
       createdAt: "",
       updatedAt: "",
     };

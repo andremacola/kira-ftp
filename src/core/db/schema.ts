@@ -5,7 +5,7 @@
  */
 
 /** Bump when adding a migration. Each index in MIGRATIONS is one version. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /**
  * Ordered list of migrations. Index 0 -> version 1, etc.
@@ -86,5 +86,21 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX idx_env_project ON environments(project_id);
   CREATE INDEX idx_ignore_project ON ignore_rules(project_id);
   CREATE INDEX idx_history_project ON transfer_history(project_id);
+  `,
+
+  // v2: connections owned by a project (self-contained projects). Standalone
+  // servers have owner_project_id NULL and are the only ones listed under
+  // "Servers". Existing connections used by an environment become owned by that
+  // project so they drop out of the Servers list.
+  `
+  ALTER TABLE connections ADD COLUMN owner_project_id INTEGER;
+
+  UPDATE connections SET owner_project_id = (
+    SELECT e.project_id FROM environments e
+    WHERE e.connection_id = connections.id
+    LIMIT 1
+  );
+
+  CREATE INDEX idx_conn_owner ON connections(owner_project_id);
   `,
 ];

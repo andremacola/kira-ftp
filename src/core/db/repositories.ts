@@ -30,6 +30,7 @@ interface ConnectionRow {
   auth_type: string;
   ssh_key_path: string | null;
   password: string | null;
+  owner_project_id: number | null;
   remote_path: string;
   remote_encoding: string;
   timeout: number;
@@ -51,6 +52,7 @@ function toConnection(r: ConnectionRow): Connection {
     authType: r.auth_type as Connection["authType"],
     sshKeyPath: r.ssh_key_path,
     password: r.password,
+    ownerProjectId: r.owner_project_id,
     remotePath: r.remote_path,
     remoteEncoding: r.remote_encoding,
     timeout: r.timeout,
@@ -65,9 +67,12 @@ function toConnection(r: ConnectionRow): Connection {
 export class ConnectionsRepo {
   constructor(private db: Database) {}
 
+  /** Standalone servers only (owner_project_id IS NULL). */
   list(): Connection[] {
     return (
-      this.db.query("SELECT * FROM connections ORDER BY name").all() as ConnectionRow[]
+      this.db
+        .query("SELECT * FROM connections WHERE owner_project_id IS NULL ORDER BY name")
+        .all() as ConnectionRow[]
     ).map(toConnection);
   }
 
@@ -84,9 +89,9 @@ export class ConnectionsRepo {
       .query(
         `INSERT INTO connections
          (name, type, host, port, user, auth_type, ssh_key_path, password,
-          remote_path, remote_encoding, timeout, keepalive, ftp_passive_mode,
-          sftp_flags, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          owner_project_id, remote_path, remote_encoding, timeout, keepalive,
+          ftp_passive_mode, sftp_flags, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         input.name,
@@ -97,6 +102,7 @@ export class ConnectionsRepo {
         input.authType,
         input.sshKeyPath,
         input.password,
+        input.ownerProjectId,
         input.remotePath,
         input.remoteEncoding,
         input.timeout,
@@ -114,8 +120,8 @@ export class ConnectionsRepo {
       .query(
         `UPDATE connections SET
           name=?, type=?, host=?, port=?, user=?, auth_type=?, ssh_key_path=?,
-          password=?, remote_path=?, remote_encoding=?, timeout=?, keepalive=?,
-          ftp_passive_mode=?, sftp_flags=?, updated_at=?
+          password=?, owner_project_id=?, remote_path=?, remote_encoding=?,
+          timeout=?, keepalive=?, ftp_passive_mode=?, sftp_flags=?, updated_at=?
          WHERE id=?`,
       )
       .run(
@@ -127,6 +133,7 @@ export class ConnectionsRepo {
         input.authType,
         input.sshKeyPath,
         input.password,
+        input.ownerProjectId,
         input.remotePath,
         input.remoteEncoding,
         input.timeout,
@@ -141,6 +148,11 @@ export class ConnectionsRepo {
 
   delete(id: number): void {
     this.db.query("DELETE FROM connections WHERE id = ?").run(id);
+  }
+
+  /** Delete all connections owned by a project (used on project delete). */
+  deleteOwnedByProject(projectId: number): void {
+    this.db.query("DELETE FROM connections WHERE owner_project_id = ?").run(projectId);
   }
 }
 

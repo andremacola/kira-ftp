@@ -11,34 +11,32 @@ import {
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { ConnectionFields, emptyConnection } from "./ConnectionFields";
 import { useStore } from "../store";
 import { useUi } from "../ui-store";
 import { api } from "../lib/rpc";
+import type { ConnectionFields as ConnFields } from "@shared/domain";
 
 export function ProjectDialog() {
   const open = useUi((s) => s.projectDialog);
   const close = useUi((s) => s.closeProjectDialog);
-  const openConnectionDialog = useUi((s) => s.openConnectionDialog);
-  const connections = useStore((s) => s.connections);
   const refreshProjects = useStore((s) => s.refreshProjects);
   const openProject = useStore((s) => s.openProject);
 
   const [name, setName] = useState("");
   const [localPath, setLocalPath] = useState("");
-  const [connectionId, setConnectionId] = useState<number | null>(null);
-  const [remotePath, setRemotePath] = useState("");
+  const [conn, setConn] = useState<ConnFields>(emptyConnection());
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
       setName("");
       setLocalPath("");
-      setConnectionId(connections[0]?.id ?? null);
-      setRemotePath(connections[0]?.remotePath ?? "");
+      setConn(emptyConnection());
       setError(null);
     }
-  }, [open, connections]);
+  }, [open]);
 
   const pickDir = async () => {
     const picked = await api.pickDirectory({});
@@ -54,62 +52,45 @@ export function ProjectDialog() {
     if (!target) return;
     try {
       const project = await api.importSublimeConfig({ localPath: target });
-      await Promise.all([refreshProjects(), useStore.getState().refreshConnections()]);
+      await refreshProjects();
       close();
       await openProject(project);
     } catch (e) {
       setError(
-        `Could not import: ${(e as Error).message}. Pick the sftp-config.json file or the folder that contains it.`,
+        `Could not import: ${(e as Error).message}. Pick the sftp-config.json file or its folder.`,
       );
     }
   };
 
   const create = async () => {
-    if (!name || !localPath || connectionId === null) return;
-    const project = await api.createProject({
-      input: {
+    if (!name || !localPath || !conn.host) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const project = await api.createFullProject({
         name,
         localPath,
-        defaultEnvironmentId: null,
-        uploadOnSave: true,
-        saveBeforeUpload: true,
-        watchEnabled: false,
-        confirmOverwriteNewer: false,
-        confirmSync: true,
-        confirmDownloads: false,
-        syncDownOnOpen: false,
-        syncSkipDeletes: false,
-        syncSameAge: false,
-        filePermissions: null,
-        dirPermissions: null,
-        allowConfigUpload: false,
-      },
-    });
-    const env = await api.createEnvironment({
-      input: {
-        projectId: project.id,
-        name: "default",
-        connectionId,
-        remotePath,
-        isDefault: true,
-      },
-    });
-    const updated = await api.updateProject({
-      id: project.id,
-      input: { ...project, defaultEnvironmentId: env.id },
-    });
-    await refreshProjects();
-    close();
-    await openProject(updated);
+        remotePath: conn.remotePath,
+        connection: { ...conn, name },
+      });
+      await refreshProjects();
+      close();
+      await openProject(project);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New project</DialogTitle>
           <DialogDescription>
-            Map a local folder to a server. Or import an existing Sublime{" "}
+            A project maps a local folder to a server. Everything below is stored with
+            this project. Or import an existing Sublime{" "}
             <code className="text-foreground">sftp-config.json</code>.
           </DialogDescription>
         </DialogHeader>
@@ -126,44 +107,13 @@ export function ProjectDialog() {
           </div>
 
           <div className="grid gap-1.5">
-            <Label>Name</Label>
+            <Label>Project name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
 
-          <div className="grid gap-1.5">
-            <Label>Server</Label>
-            {connections.length === 0 ? (
-              <Button variant="outline" onClick={() => openConnectionDialog(null)}>
-                Create a server first…
-              </Button>
-            ) : (
-              <Select
-                value={connectionId?.toString() ?? ""}
-                onValueChange={(v) => {
-                  const id = Number(v);
-                  setConnectionId(id);
-                  const c = connections.find((x) => x.id === id);
-                  if (c) setRemotePath(c.remotePath);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select server" />
-                </SelectTrigger>
-                <SelectContent>
-                  {connections.map((c) => (
-                    <SelectItem key={c.id} value={c.id.toString()}>
-                      {c.name} ({c.host})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+          <div className="h-px bg-border" />
 
-          <div className="grid gap-1.5">
-            <Label>Remote path</Label>
-            <Input value={remotePath} onChange={(e) => setRemotePath(e.target.value)} placeholder="/var/www/html" />
-          </div>
+          <ConnectionFields value={conn} onChange={setConn} />
         </div>
 
         {error && (
@@ -180,7 +130,7 @@ export function ProjectDialog() {
           <Button variant="ghost" onClick={close}>
             Cancel
           </Button>
-          <Button onClick={create} disabled={!name || !localPath || connectionId === null}>
+          <Button onClick={create} disabled={!name || !localPath || !conn.host || saving}>
             Create
           </Button>
         </DialogFooter>

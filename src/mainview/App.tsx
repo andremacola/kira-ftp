@@ -4,7 +4,6 @@ import { Sidebar } from "./components/Sidebar";
 import { DualPane } from "./components/DualPane";
 import { TransferDock } from "./components/TransferDock";
 import { TopBar } from "./components/TopBar";
-import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ProjectDialog } from "./components/ProjectDialog";
 import { PromptDialog } from "./components/PromptDialog";
 import { ConfirmDialog } from "./components/ConfirmDialog";
@@ -48,7 +47,6 @@ export default function App() {
         <TransferDock />
       </div>
 
-      <ConnectionDialog />
       <ProjectDialog />
       <PromptDialog />
       <ConfirmDialog />

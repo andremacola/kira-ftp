@@ -4,7 +4,7 @@
  */
 import { basename } from "node:path";
 import type {
-  ConnectionInput,
+  ConnectionFields,
   ProjectInput,
 } from "../../shared/domain";
 
@@ -38,7 +38,7 @@ interface SublimeConfig {
 }
 
 export interface ImportResult {
-  connection: ConnectionInput;
+  connection: ConnectionFields;
   project: Omit<ProjectInput, "defaultEnvironmentId">;
   remotePath: string;
   ignorePatterns: string[];
@@ -123,7 +123,7 @@ export function parseSublimeConfig(text: string, localPath: string): ImportResul
       ? cfg.sftp_flags.split(/\s+/).filter(Boolean)
       : [];
 
-  const connection: ConnectionInput = {
+  const connection: ConnectionFields = {
     name,
     type,
     host: cfg.host ?? "",

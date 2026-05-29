@@ -44,16 +44,20 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
       getProject: ({ id }) => ctx.projects.get(id),
       createProject: ({ input }) => ctx.projects.create(input),
       updateProject: ({ id, input }) => ctx.projects.update(id, input),
-      deleteProject: ({ id }) => {
-        ctx.watcher.stop(id);
-        ctx.projects.delete(id);
-      },
+      deleteProject: ({ id }) => ctx.deleteProjectFull(id),
+      createFullProject: ({ name, localPath, remotePath, connection }) =>
+        ctx.createFullProject({ name, localPath, remotePath, connection }),
 
       /* environments */
       listEnvironments: ({ projectId }) => ctx.environments.listForProject(projectId),
       createEnvironment: ({ input }) => ctx.environments.create(input),
       updateEnvironment: ({ id, input }) => ctx.environments.update(id, input),
       deleteEnvironment: ({ id }) => ctx.environments.delete(id),
+      addEnvironment: ({ projectId, name, isDefault, remotePath, connection }) =>
+        ctx.addEnvironment({ projectId, name, isDefault, remotePath, connection }),
+      updateEnvironmentFull: ({ environmentId, name, isDefault, remotePath, connection }) =>
+        ctx.updateEnvironmentFull({ environmentId, name, isDefault, remotePath, connection }),
+      deleteEnvironmentFull: ({ id }) => ctx.deleteEnvironmentFull(id),
 
       /* ignore rules */
       listIgnoreRules: ({ projectId }) => ctx.ignoreRules.listForProject(projectId),
@@ -197,29 +201,23 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
         }
         const text = readFileSync(file, "utf-8");
         const result = parseSublimeConfig(text, dir);
-        // one transaction so a partial import can't leave orphaned rows
-        return ctx.db.transaction(() => {
-          const conn = ctx.connections.create(result.connection);
-          const project = ctx.projects.create({
-            ...result.project,
-            defaultEnvironmentId: null,
-          });
-          const env = ctx.environments.create({
-            projectId: project.id,
-            name: "default",
-            connectionId: conn.id,
-            remotePath: result.remotePath,
-            isDefault: true,
-          });
-          const updated = ctx.projects.update(project.id, {
-            ...result.project,
-            defaultEnvironmentId: env.id,
-          });
-          for (const pattern of result.ignorePatterns) {
-            ctx.ignoreRules.create(project.id, pattern);
-          }
-          return updated;
-        })();
+        // self-contained project (its own owned connection + default env)
+        const project = ctx.createFullProject({
+          name: result.project.name,
+          localPath: dir,
+          remotePath: result.remotePath,
+          connection: result.connection,
+          seedIgnores: false,
+        });
+        // apply the imported project settings and ignore patterns
+        ctx.projects.update(project.id, {
+          ...result.project,
+          defaultEnvironmentId: project.defaultEnvironmentId,
+        });
+        for (const pattern of result.ignorePatterns) {
+          ctx.ignoreRules.create(project.id, pattern);
+        }
+        return ctx.projects.get(project.id)!;
       },
       recentHistory: () => ctx.history.recent(),
       pickDirectory: () => pickPath({ directory: true }),
