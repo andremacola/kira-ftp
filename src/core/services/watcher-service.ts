@@ -4,8 +4,8 @@
  * Uses node:fs recursive watch (native on macOS) — no extra dependency.
  */
 import { watch, type FSWatcher } from "node:fs";
-import { relative, join, sep } from "node:path";
-import { statSync } from "node:fs";
+import { join, sep } from "node:path";
+import { statSync, readFileSync } from "node:fs";
 import type { Connection, Project } from "../../shared/domain";
 import { isIgnored } from "../util/ignore";
 import { joinRemote } from "../connections/transport";
@@ -13,6 +13,8 @@ import { joinRemote } from "../connections/transport";
 interface WatchHandle {
   watcher: FSWatcher;
   timers: Map<string, ReturnType<typeof setTimeout>>;
+  /** Last-uploaded content signature per relative path (dedup). */
+  sigs: Map<string, string>;
 }
 
 export interface WatcherDeps {
@@ -22,7 +24,9 @@ export interface WatcherDeps {
   onEvent: (projectId: number, path: string, action: "upload" | "skip") => void;
 }
 
-const DEBOUNCE_MS = 250;
+const DEBOUNCE_MS = 400;
+/** Files larger than this fall back to size+mtime signatures (skip hashing). */
+const HASH_MAX_BYTES = 8 * 1024 * 1024;
 
 export class WatcherService {
   private handles = new Map<number, WatchHandle>();
@@ -43,6 +47,7 @@ export class WatcherService {
     if (this.handles.has(project.id)) return;
 
     const timers = new Map<string, ReturnType<typeof setTimeout>>();
+    const sigs = new Map<string, string>();
     const watcher = watch(
       project.localPath,
       { recursive: true },
@@ -69,7 +74,25 @@ export class WatcherService {
       },
     );
 
-    this.handles.set(project.id, { watcher, timers });
+    this.handles.set(project.id, { watcher, timers, sigs });
+  }
+
+  /**
+   * Content signature for de-duping uploads. Small files are hashed for exact
+   * content comparison (so metadata-only touches — e.g. from cloud sync — don't
+   * re-upload); large files fall back to size+mtime.
+   */
+  private signature(localPath: string): string | null {
+    try {
+      const st = statSync(localPath);
+      if (!st.isFile()) return null;
+      if (st.size <= HASH_MAX_BYTES) {
+        return `h:${st.size}:${String(Bun.hash(readFileSync(localPath)))}`;
+      }
+      return `s:${st.size}:${Math.round(st.mtimeMs)}`;
+    } catch {
+      return null;
+    }
   }
 
   private handleChange(
@@ -79,15 +102,19 @@ export class WatcherService {
     rel: string,
     localPath: string,
   ): void {
-    let isFile = false;
-    try {
-      isFile = statSync(localPath).isFile();
-    } catch {
-      // deleted/moved — upload-on-save only mirrors writes, not deletes
+    const sig = this.signature(localPath);
+    if (sig === null) {
+      // deleted/moved or not a regular file — upload-on-save only mirrors writes
       this.deps.onEvent(project.id, localPath, "skip");
       return;
     }
-    if (!isFile) return;
+    const handle = this.handles.get(project.id);
+    if (handle && handle.sigs.get(rel) === sig) {
+      // content unchanged since last upload (duplicate event / metadata touch)
+      this.deps.onEvent(project.id, localPath, "skip");
+      return;
+    }
+    handle?.sigs.set(rel, sig);
 
     const remotePath = joinRemote(remoteRoot, rel.split(sep).join("/"));
     this.deps.upload(conn, localPath, remotePath);
