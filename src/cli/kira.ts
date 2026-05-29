@@ -15,7 +15,12 @@
 import { resolve } from "node:path";
 import { readControlPort, readControlToken, type ControlAction } from "../core/control/server";
 
-const BASE = `http://127.0.0.1:${readControlPort()}`;
+// Read the port per call: a just-launched app may publish a non-default port
+// after this process started, so caching it at import time can target 8911
+// while the app listens elsewhere.
+function base(): string {
+  return `http://127.0.0.1:${readControlPort()}`;
+}
 
 const ALIASES: Record<string, ControlAction> = {
   upload: "upload",
@@ -40,7 +45,7 @@ function usage(): never {
 
 async function ping(): Promise<boolean> {
   try {
-    const r = await fetch(`${BASE}/ping`, { signal: AbortSignal.timeout(800) });
+    const r = await fetch(`${base()}/ping`, { signal: AbortSignal.timeout(800) });
     return r.ok;
   } catch {
     return false;
@@ -84,7 +89,7 @@ async function main() {
 
   let res: Response;
   try {
-    res = await fetch(`${BASE}/command`, {
+    res = await fetch(`${base()}/command`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-kira-token": token },
       body: JSON.stringify({ action, path }),

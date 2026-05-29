@@ -10,7 +10,7 @@
  * - Zed: keymap bindings + global tasks — fully wired.
  * - Sublime: a plugin file + keymap in Packages/User.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseJsoncArray } from "../util/jsonc";
@@ -114,7 +114,12 @@ export class EditorIntegrationService {
       detected:
         f.appNames.some((n) => existsSync(`/Applications/${n}.app`)) ||
         existsSync(this.appSupport(f.supportDir)),
-      installed: this.fileHasMarker(this.forkKeybindings(f)),
+      // installed = all our task-label bindings present
+      installed: this.arrayHasAll(this.forkKeybindings(f), (e) =>
+        BINDINGS.map((b) => this.vscodeTaskLabel(b.action)).includes(
+          String((e as { args?: unknown }).args),
+        ),
+      ),
     }));
     return [
       ...forks,
@@ -122,7 +127,9 @@ export class EditorIntegrationService {
         id: "zed",
         name: "Zed",
         detected: existsSync("/Applications/Zed.app") || existsSync(join(this.home, ".config/zed")),
-        installed: this.fileHasMarker(this.zedKeymap()),
+        installed: this.arrayHasAll(this.zedTasks(), (e) =>
+          String((e as { label?: unknown }).label).startsWith(`${MARKER}:`),
+        ),
       },
       {
         id: "sublime",
@@ -134,12 +141,14 @@ export class EditorIntegrationService {
     ];
   }
 
-  private fileHasMarker(path: string): boolean {
-    try {
-      return readFileSync(path, "utf-8").includes(MARKER);
-    } catch {
-      return false;
-    }
+  /** True if the JSONC array file contains at least one entry matching pred
+   *  for every binding (i.e. all our entries are present). */
+  private arrayHasAll(path: string, pred: (e: unknown) => boolean): boolean {
+    const arr = this.readArray(path);
+    const matches = arr.filter(
+      (e) => e !== null && typeof e === "object" && pred(e),
+    ).length;
+    return matches >= BINDINGS.length;
   }
 
   /* ----------------------------- install -------------------------------- */
@@ -163,22 +172,45 @@ export class EditorIntegrationService {
     }
   }
 
+  /** Write JSON, backing up an existing non-empty file to `<path>.kira.bak`. */
+  private writeBackedUp(path: string, data: unknown): void {
+    this.ensureDir(path);
+    if (existsSync(path)) {
+      try {
+        copyFileSync(path, `${path}.kira.bak`);
+      } catch {
+        /* best-effort backup */
+      }
+    }
+    writeFileSync(path, JSON.stringify(data, null, 2));
+  }
+
+  /** Our VS Code task label for an action (also the idempotency marker). */
+  private vscodeTaskLabel(action: string): string {
+    return `Kira: ${action}`;
+  }
+
   private installVscodeFork(fork: VscodeFork): InstallResult {
     const path = this.forkKeybindings(fork);
-    if (this.fileHasMarker(path)) {
+    const arr = this.readArray(path);
+    const has = (label: string) =>
+      arr.some(
+        (e) =>
+          e !== null &&
+          typeof e === "object" &&
+          (e as { args?: unknown }).args === label,
+      );
+    if (BINDINGS.every((b) => has(this.vscodeTaskLabel(b.action)))) {
       return { ok: true, alreadyInstalled: true, message: `${fork.name} already configured` };
     }
-    const arr = this.readArray(path);
     for (const b of BINDINGS) {
-      arr.push({
-        key: VSCODE_KEYS[b.key],
-        command: "workbench.action.tasks.runTask",
-        args: `Kira: ${b.action}`,
-        when: `true /* ${MARKER} */`,
-      });
+      const label = this.vscodeTaskLabel(b.action);
+      if (has(label)) continue; // don't duplicate an existing binding
+      // No `when` clause: the binding is always active. (A `when` with a JS
+      // comment is invalid context-key syntax and would disable the binding.)
+      arr.push({ key: VSCODE_KEYS[b.key], command: "workbench.action.tasks.runTask", args: label });
     }
-    this.ensureDir(path);
-    writeFileSync(path, JSON.stringify(arr, null, 2));
+    this.writeBackedUp(path, arr);
     return {
       ok: true,
       alreadyInstalled: false,
@@ -190,21 +222,26 @@ export class EditorIntegrationService {
 
   private installZed(): InstallResult {
     const keymapPath = this.zedKeymap();
-    if (this.fileHasMarker(keymapPath)) {
+    const tasksPath = this.zedTasks();
+    const tasks = this.readArray(tasksPath);
+    const taskLabel = (action: string) => `${MARKER}: ${action}`;
+    const hasTask = (label: string) =>
+      tasks.some((t) => t !== null && typeof t === "object" && (t as { label?: unknown }).label === label);
+
+    if (BINDINGS.every((b) => hasTask(taskLabel(b.action)))) {
       return { ok: true, alreadyInstalled: true, message: "Zed already configured" };
     }
-    const tasks = this.readArray(this.zedTasks());
     const bin = this.kiraBin();
     for (const b of BINDINGS) {
+      if (hasTask(taskLabel(b.action))) continue;
       tasks.push({
-        label: `${MARKER}: ${b.action}`,
+        label: taskLabel(b.action),
         command: `${bin} ${b.action} "$ZED_FILE"`,
         use_new_terminal: false,
-        reveal: "on_failure",
+        reveal: "never", // valid Zed values: always | no_focus | never
       });
     }
-    this.ensureDir(this.zedTasks());
-    writeFileSync(this.zedTasks(), JSON.stringify(tasks, null, 2));
+    this.writeBackedUp(tasksPath, tasks);
 
     const keymap = this.readArray(keymapPath);
     const keyName: Record<string, string> = {
@@ -216,11 +253,10 @@ export class EditorIntegrationService {
     };
     const bindings: Record<string, unknown> = {};
     for (const b of BINDINGS) {
-      bindings[keyName[b.key]!] = ["task::Spawn", { task_name: `${MARKER}: ${b.action}` }];
+      bindings[keyName[b.key]!] = ["task::Spawn", { task_name: taskLabel(b.action) }];
     }
     keymap.push({ context: "Workspace", bindings });
-    this.ensureDir(keymapPath);
-    writeFileSync(keymapPath, JSON.stringify(keymap, null, 2));
+    this.writeBackedUp(keymapPath, keymap);
     return { ok: true, alreadyInstalled: false, message: "Zed tasks + keybindings installed" };
   }
 
@@ -242,10 +278,19 @@ export class EditorIntegrationService {
       down: "super+alt+down",
       s: "super+alt+s",
     };
+    const has = (action: string) =>
+      keymap.some(
+        (e) =>
+          e !== null &&
+          typeof e === "object" &&
+          (e as { command?: unknown; args?: { action?: unknown } }).command === "kira_ftp" &&
+          (e as { args?: { action?: unknown } }).args?.action === action,
+      );
     for (const b of BINDINGS) {
+      if (has(b.action)) continue;
       keymap.push({ keys: [keyName[b.key]], command: "kira_ftp", args: { action: b.action } });
     }
-    writeFileSync(keymapPath, JSON.stringify(keymap, null, 2));
+    this.writeBackedUp(keymapPath, keymap);
     return { ok: true, alreadyInstalled: false, message: "Sublime plugin + keybindings installed" };
   }
 }

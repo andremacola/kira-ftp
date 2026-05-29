@@ -43,7 +43,13 @@ export class MenubarManager {
       // so the intrinsic point-size must match this; keep createTray at 18 too.
       this.tray = new Tray({ image: IDLE_ICON, template: true, width: 18, height: 18 });
       this.tray.setMenu(this.menu());
-      this.tray.on("tray-clicked", () => this.onOpen());
+      // Tray menu items report their `action` via the same tray-clicked event;
+      // a bare icon click has an empty action. Dispatch accordingly.
+      this.tray.on("tray-clicked", (e) => {
+        const action = (e as { action?: string } | undefined)?.action;
+        if (action === "quit") this.onQuit();
+        else this.onOpen();
+      });
     } catch {
       this.tray = null; // tray unavailable (rare) — app still works
     }
@@ -71,10 +77,12 @@ export class MenubarManager {
   }
 
   private menu() {
+    // Tray menus dispatch via `action` (the click handler reads it); `role` is
+    // not honored on tray items, so Quit uses an action we handle ourselves.
     return [
       { type: "normal" as const, label: "Open Kira FTP", action: "open" },
       { type: "divider" as const },
-      { type: "normal" as const, label: "Quit", role: "quit" },
+      { type: "normal" as const, label: "Quit Kira FTP", action: "quit" },
     ];
   }
 

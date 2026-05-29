@@ -82,7 +82,7 @@ export function TransferDock() {
             <div className="font-mono text-[11px] leading-relaxed">
               {logs.map((l, i) => (
                 <div
-                  key={i}
+                  key={`${l.at}-${i}`}
                   className={cn(
                     l.level === "error" && "text-destructive",
                     l.level === "warn" && "text-amber-500",

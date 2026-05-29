@@ -97,10 +97,12 @@ export function FilePane({ pane }: { pane: Pane }) {
     setSelected(pane, next);
   };
 
-  /** Entries the user is acting on: the full selection, or just `entry`. */
+  /** Entries the user is acting on: the full selection, or just `entry`.
+   *  Resolved against the unfiltered list so a search filter never silently
+   *  drops selected-but-hidden items from a batch action. */
   const actionTargets = (entry: FileEntry): FileEntry[] => {
     if (state.selected.has(entry.path) && state.selected.size > 1) {
-      return entries.filter((x) => state.selected.has(x.path));
+      return state.entries.filter((x) => state.selected.has(x.path));
     }
     return [entry];
   };
@@ -251,29 +253,38 @@ export function FilePane({ pane }: { pane: Pane }) {
     for (const t of actionTargets(entry)) transferOne(t, other.path);
   };
 
-  /** Drop targets from the OTHER pane onto this pane (or a folder in it). */
-  const onDropEntries = (paths: string[], destDir: string) => {
+  /** Handle a drop of `payload` (from some pane) into destDir on THIS pane. */
+  const onDropPayload = (payload: { pane: Pane; paths: string[] }, destDir: string) => {
     if (!canRemote) return;
-    // dropping FROM the other pane: those entries live on the opposite side, so
-    // the *other* pane drives the transfer direction. We mirror transferOne from
-    // the other pane's perspective by pushing into destDir on THIS side.
-    const sourceEntries = other.entries.filter((e) => paths.includes(e.path));
+    // Only cross-pane drops transfer; dropping back on the source pane is a no-op.
+    if (payload.pane === pane) return;
+    // The dragged entries live in the OTHER pane (the source). Resolve them there.
+    const sourceEntries = other.entries.filter((e) => payload.paths.includes(e.path));
     for (const e of sourceEntries) {
       if (activeConnectionId === null) continue;
       if (isRemote) {
-        // other = local -> upload into this remote destDir
-        const remoteTarget = joinRemote(destDir, e.name);
+        const remoteTarget = joinRemote(destDir, e.name); // local -> remote: upload
         if (e.type === "dir")
           void api.uploadFolder({ connectionId: activeConnectionId, localDir: e.path, remoteDir: remoteTarget });
         else void api.uploadFile({ connectionId: activeConnectionId, localPath: e.path, remotePath: remoteTarget });
       } else {
-        // other = remote -> download into this local destDir
-        const localTarget = joinLocal(destDir, e.name);
+        const localTarget = joinLocal(destDir, e.name); // remote -> local: download
         if (e.type === "dir")
           void api.downloadFolder({ connectionId: activeConnectionId, remoteDir: e.path, localDir: localTarget });
         else void api.downloadFile({ connectionId: activeConnectionId, remotePath: e.path, localPath: localTarget });
       }
     }
+  };
+
+  /** Parse a drag payload, tolerating malformed data. */
+  const parsePayload = (raw: string): { pane: Pane; paths: string[] } | null => {
+    try {
+      const p = JSON.parse(raw);
+      if (p && (p.pane === "local" || p.pane === "remote") && Array.isArray(p.paths)) return p;
+    } catch {
+      /* ignore */
+    }
+    return null;
   };
 
   return (
@@ -335,10 +346,10 @@ export function FilePane({ pane }: { pane: Pane }) {
         }}
         onDrop={(e) => {
           setPaneDropActive(false);
-          const raw = e.dataTransfer.getData(DRAG_MIME);
-          if (!raw) return;
+          const payload = parsePayload(e.dataTransfer.getData(DRAG_MIME));
+          if (!payload) return;
           e.preventDefault();
-          onDropEntries(JSON.parse(raw) as string[], state.path);
+          onDropPayload(payload, state.path);
         }}
       >
         {isRemote && !canRemote && (
@@ -361,7 +372,7 @@ export function FilePane({ pane }: { pane: Pane }) {
                   const paths = state.selected.has(entry.path)
                     ? [...state.selected]
                     : [entry.path];
-                  e.dataTransfer.setData(DRAG_MIME, JSON.stringify(paths));
+                  e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ pane, paths }));
                   e.dataTransfer.effectAllowed = "copy";
                 }}
                 onDragOver={(e) => {
@@ -375,13 +386,13 @@ export function FilePane({ pane }: { pane: Pane }) {
                 onDragLeave={() => setDropTarget((p) => (p === entry.path ? null : p))}
                 onDrop={(e) => {
                   if (entry.type !== "dir") return;
-                  const raw = e.dataTransfer.getData(DRAG_MIME);
-                  if (!raw) return;
+                  const payload = parsePayload(e.dataTransfer.getData(DRAG_MIME));
+                  if (!payload) return;
                   e.preventDefault();
                   e.stopPropagation();
                   setDropTarget(null);
                   setPaneDropActive(false);
-                  onDropEntries(JSON.parse(raw) as string[], entry.path);
+                  onDropPayload(payload, entry.path);
                 }}
                 onDoubleClick={() => open(entry)}
                 onClick={(e) => onRowClick(entry, e)}

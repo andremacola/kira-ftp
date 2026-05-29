@@ -6,12 +6,18 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { MIGRATIONS } from "./schema";
+import { MIGRATIONS, SCHEMA_VERSION } from "./schema";
 
 let db: Database | null = null;
 
 /** Apply any migrations newer than the DB's current user_version. */
 function migrate(database: Database): void {
+  // Guard against SCHEMA_VERSION drifting away from the actual migration count.
+  if (SCHEMA_VERSION !== MIGRATIONS.length) {
+    throw new Error(
+      `SCHEMA_VERSION (${SCHEMA_VERSION}) != MIGRATIONS.length (${MIGRATIONS.length})`,
+    );
+  }
   const current = (
     database.query("PRAGMA user_version").get() as { user_version: number }
   ).user_version;

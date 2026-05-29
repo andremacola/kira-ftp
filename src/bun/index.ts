@@ -241,7 +241,11 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
         }
         try {
           control.setPort(port);
-          return { ok: true };
+          // start() doesn't throw on a busy port; reflect the real bind result.
+          const s = control.status();
+          return s.state === "active"
+            ? { ok: true }
+            : { ok: false, error: s.error ?? `Could not bind port ${port}` };
         } catch (e) {
           return { ok: false, error: (e as Error).message };
         }
@@ -324,9 +328,10 @@ const menubar = new MenubarManager(
   ctx,
   () => {
     win.show();
-    win.focus();
+    win.activate();
   },
-  () => process.exit(0),
+  // Quit from the tray: close pooled connections / rclone gracefully first.
+  () => void gracefulShutdown().finally(() => process.exit(0)),
 );
 menubar.init();
 

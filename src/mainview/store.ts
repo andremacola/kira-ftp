@@ -218,9 +218,23 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   navigate: async (pane, path) => {
+    // Clear the selection only when actually changing directory; a same-dir
+    // refresh (e.g. after a background transfer completes) must preserve it.
+    const sameDir = get()[pane].path === path;
     // set the path immediately so the breadcrumb and counterpart-path logic are
     // correct even if the listing fails (e.g. remote dir not created yet)
-    set((s) => ({ [pane]: { ...s[pane], path, loading: true, error: null, selected: new Set() } }) as Partial<AppState>);
+    set(
+      (s) =>
+        ({
+          [pane]: {
+            ...s[pane],
+            path,
+            loading: true,
+            error: null,
+            selected: sameDir ? s[pane].selected : new Set(),
+          },
+        }) as Partial<AppState>,
+    );
     try {
       const entries =
         pane === "local"

@@ -51,15 +51,24 @@ export function GlobalSettingsDialog() {
   }, [open]);
 
   const installEditor = async (id: string) => {
-    const res = await api.installEditorIntegration({ id });
-    setEditorMsg((m) => ({ ...m, [id]: res.message }));
+    try {
+      const res = await api.installEditorIntegration({ id });
+      setEditorMsg((m) => ({ ...m, [id]: res.message }));
+    } catch (e) {
+      setEditorMsg((m) => ({ ...m, [id]: `Failed: ${(e as Error).message}` }));
+    }
     await refreshEditors();
   };
 
   const savePort = async () => {
     setPortError(null);
     setPortSaved(false);
-    const res = await api.setControlPort({ port: Number(port) });
+    const n = Number(port);
+    if (!Number.isInteger(n) || n < 1024 || n > 65535) {
+      setPortError("Port must be between 1024 and 65535");
+      return;
+    }
+    const res = await api.setControlPort({ port: n });
     if (res.ok) {
       setPortSaved(true);
       void refreshStatus();
@@ -71,6 +80,8 @@ export function GlobalSettingsDialog() {
     stopped: { label: "Stopped", dot: "bg-muted-foreground", text: "text-muted-foreground" },
     failed: { label: "Failed", dot: "bg-destructive", text: "text-destructive" },
   } as const;
+  const statusMeta = (s: string) =>
+    STATUS_META[s as keyof typeof STATUS_META] ?? STATUS_META.stopped;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
@@ -105,9 +116,9 @@ export function GlobalSettingsDialog() {
             <div className="mb-1.5 flex items-center justify-between">
               <Label>CLI control server</Label>
               {status && (
-                <span className={`flex items-center gap-1.5 text-xs ${STATUS_META[status.state].text}`}>
-                  <span className={`size-2 rounded-full ${STATUS_META[status.state].dot}`} />
-                  {STATUS_META[status.state].label}
+                <span className={`flex items-center gap-1.5 text-xs ${statusMeta(status.state).text}`}>
+                  <span className={`size-2 rounded-full ${statusMeta(status.state).dot}`} />
+                  {statusMeta(status.state).label}
                   {status.state === "active" && (
                     <span className="text-muted-foreground">· 127.0.0.1:{status.port}</span>
                   )}

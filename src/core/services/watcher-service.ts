@@ -104,7 +104,10 @@ export class WatcherService {
   ): void {
     const sig = this.signature(localPath);
     if (sig === null) {
-      // deleted/moved or not a regular file — upload-on-save only mirrors writes
+      // deleted/moved or not a regular file — upload-on-save only mirrors writes.
+      // Drop any stale signature so a later re-create with the same bytes still
+      // uploads, and so the map doesn't grow with dead paths.
+      this.handles.get(project.id)?.sigs.delete(rel);
       this.deps.onEvent(project.id, localPath, "skip");
       return;
     }
