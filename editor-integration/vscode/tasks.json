@@ -4,35 +4,35 @@
     {
       "label": "Kira: Upload current file",
       "type": "shell",
-      "command": "kira upload \"${file}\"",
+      "command": "kira-ftp upload \"${file}\"",
       "presentation": { "reveal": "silent", "panel": "shared", "close": true },
       "problemMatcher": []
     },
     {
       "label": "Kira: Download current file",
       "type": "shell",
-      "command": "kira download \"${file}\"",
+      "command": "kira-ftp download \"${file}\"",
       "presentation": { "reveal": "silent", "panel": "shared", "close": true },
       "problemMatcher": []
     },
     {
       "label": "Kira: Sync up (folder of current file)",
       "type": "shell",
-      "command": "kira sync-up \"${file}\"",
+      "command": "kira-ftp sync-up \"${file}\"",
       "presentation": { "reveal": "always", "panel": "shared" },
       "problemMatcher": []
     },
     {
       "label": "Kira: Sync down (folder of current file)",
       "type": "shell",
-      "command": "kira sync-down \"${file}\"",
+      "command": "kira-ftp sync-down \"${file}\"",
       "presentation": { "reveal": "always", "panel": "shared" },
       "problemMatcher": []
     },
     {
       "label": "Kira: Sync both (folder of current file)",
       "type": "shell",
-      "command": "kira sync \"${file}\"",
+      "command": "kira-ftp sync \"${file}\"",
       "presentation": { "reveal": "always", "panel": "shared" },
       "problemMatcher": []
     }

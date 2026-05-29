@@ -80,7 +80,7 @@ export class EditorIntegrationService {
 
   /** Absolute path to the installed CLI if known, else the bare name. */
   private kiraBin(): string {
-    return this.cliLoc.get() ?? process.env.KIRA_CLI_PATH ?? "kira";
+    return this.cliLoc.get() ?? process.env.KIRA_CLI_PATH ?? "kira-ftp";
   }
 
   /* ------------------------------- CLI ---------------------------------- */
@@ -91,12 +91,12 @@ export class EditorIntegrationService {
   }
 
   /**
-   * Install the `kira` CLI as a tiny shell script (curl-based) into `dir`.
+   * Install the `kira-ftp` CLI as a tiny shell script (curl-based) into `dir`.
    * No build step, no 63MB binary: it reads the port/token files the app
    * publishes and POSTs to the control server.
    */
   installCli(dir: string): InstallResult {
-    const target = join(dir, "kira");
+    const target = join(dir, "kira-ftp");
     try {
       mkdirSync(dir, { recursive: true });
       writeFileSync(target, CLI_SCRIPT.replace("__DATA_DIR__", this.appDataDir()), {
@@ -358,9 +358,9 @@ function memoryCliLocation(): CliLocation {
  * launches the app if it isn't running. __DATA_DIR__ is baked in at install.
  */
 const CLI_SCRIPT = `#!/bin/sh
-# kira — Kira FTP CLI (installed by the app). Triggers upload/download/sync of a
-# path; the app resolves which project owns it.
-#   kira <upload|download|sync-up|sync-down|sync> <path>
+# kira-ftp — Kira FTP CLI (installed by the app). Triggers upload/download/sync
+# of a path; the app resolves which project owns it.
+#   kira-ftp <upload|download|sync-up|sync-down|sync> <path>
 set -eu
 DATA_DIR="__DATA_DIR__"
 APP_PATH="\${KIRA_APP_PATH:-/Applications/Kira FTP.app}"
@@ -370,7 +370,7 @@ case "$action" in
   up) action=upload;; down) action=download;;
   push) action=sync-up;; pull) action=sync-down;; sync) action=sync-both;;
   upload|download|sync-up|sync-down|sync-both) ;;
-  *) echo "Usage: kira <upload|download|sync-up|sync-down|sync> <path>" >&2; exit 2;;
+  *) echo "Usage: kira-ftp <upload|download|sync-up|sync-down|sync> <path>" >&2; exit 2;;
 esac
 [ -n "$target" ] || { echo "Missing <path>" >&2; exit 2; }
 

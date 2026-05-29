@@ -1,21 +1,21 @@
 # Kira FTP — editor integration
 
 Trigger Kira FTP upload/download/sync from your editor with a keymap. Each
-command runs the `kira` CLI on the current file/dir; Kira FTP resolves which
+command runs the `kira-ftp` CLI on the current file/dir; Kira FTP resolves which
 project owns that path and performs the action (launching the app if needed).
 
 ## 1. Install the CLI
 
 Easiest: open **Kira FTP → Settings (gear) → Command-line tool** and click
 **Install CLI…**, then pick a folder on your PATH (e.g. `~/.local/bin`). This
-writes a tiny `kira` shell script (no build needed) and the editor-integration
-buttons in the same screen will wire it up by absolute path.
+writes a tiny `kira-ftp` shell script (no build needed) and the
+editor-integration buttons in the same screen wire it up by absolute path.
 
 Manual alternative (standalone binary):
 
 ```bash
-bun run build:cli          # produces dist-cli/kira (~63MB, bundles Bun)
-cp dist-cli/kira ~/.local/bin/kira
+bun run build:cli          # produces dist-cli/kira-ftp (~63MB, bundles Bun)
+cp dist-cli/kira-ftp ~/.local/bin/kira-ftp
 ```
 
 If Kira FTP is not in `/Applications`, set `KIRA_APP_PATH` to the `.app` so the
@@ -24,11 +24,11 @@ CLI can auto-launch it.
 ## 2. Commands
 
 ```
-kira upload     <path>      # alias: up
-kira download   <path>      # alias: down
-kira sync-up    <path>      # alias: push   (local → remote)
-kira sync-down  <path>      # alias: pull   (remote → local)
-kira sync       <path>      #               (bidirectional)
+kira-ftp upload     <path>      # alias: up
+kira-ftp download   <path>      # alias: down
+kira-ftp sync-up    <path>      # alias: push   (local → remote)
+kira-ftp sync-down  <path>      # alias: pull   (remote → local)
+kira-ftp sync       <path>      #               (bidirectional)
 ```
 
 `<path>` can be a file or a folder. For a file, sync acts on its parent dir.

@@ -2,31 +2,31 @@
 [
   {
     "label": "Kira: Upload",
-    "command": "kira upload \"$ZED_FILE\"",
+    "command": "kira-ftp upload \"$ZED_FILE\"",
     "use_new_terminal": false,
     "reveal": "never"
   },
   {
     "label": "Kira: Download",
-    "command": "kira download \"$ZED_FILE\"",
+    "command": "kira-ftp download \"$ZED_FILE\"",
     "use_new_terminal": false,
     "reveal": "never"
   },
   {
     "label": "Kira: Sync up",
-    "command": "kira sync-up \"$ZED_FILE\"",
+    "command": "kira-ftp sync-up \"$ZED_FILE\"",
     "use_new_terminal": false,
     "reveal": "on_failure"
   },
   {
     "label": "Kira: Sync down",
-    "command": "kira sync-down \"$ZED_FILE\"",
+    "command": "kira-ftp sync-down \"$ZED_FILE\"",
     "use_new_terminal": false,
     "reveal": "on_failure"
   },
   {
     "label": "Kira: Sync both",
-    "command": "kira sync \"$ZED_FILE\"",
+    "command": "kira-ftp sync \"$ZED_FILE\"",
     "use_new_terminal": false,
     "reveal": "on_failure"
   }

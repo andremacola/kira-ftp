@@ -1,16 +1,16 @@
 #!/usr/bin/env bun
 /**
- * `kira` — external CLI to drive the running Kira FTP app from editors
+ * `kira-ftp` — external CLI to drive the running Kira FTP app from editors
  * (Sublime/VSCode/Zed keymaps). Resolves the project that owns a path inside
  * the app and triggers upload/download/sync. Talks to the app's local control
  * server; launches the app if it isn't running.
  *
  * Usage:
- *   kira upload   <path>
- *   kira download <path>
- *   kira sync-up  <path>
- *   kira sync-down <path>
- *   kira sync     <path>     (bidirectional)
+ *   kira-ftp upload    <path>
+ *   kira-ftp download  <path>
+ *   kira-ftp sync-up   <path>
+ *   kira-ftp sync-down <path>
+ *   kira-ftp sync      <path>     (bidirectional)
  */
 import { resolve } from "node:path";
 import { readControlPort, readControlToken, type ControlAction } from "../core/control/server";
@@ -37,7 +37,7 @@ const ALIASES: Record<string, ControlAction> = {
 
 function usage(): never {
   console.error(
-    "Usage: kira <upload|download|sync-up|sync-down|sync> <path>\n" +
+    "Usage: kira-ftp <upload|download|sync-up|sync-down|sync> <path>\n" +
       "Aliases: up, down, push (sync-up), pull (sync-down), sync (both)",
   );
   process.exit(2);

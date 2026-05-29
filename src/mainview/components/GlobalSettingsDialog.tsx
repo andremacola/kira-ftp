@@ -146,7 +146,7 @@ export function GlobalSettingsDialog() {
               )}
             </div>
             <p className="mb-1.5 text-[11px] text-muted-foreground">
-              Local server the <code>kira</code> CLI talks to (editor integrations).
+              Local server the <code>kira-ftp</code> CLI talks to (editor integrations).
               Changing the port restarts it.
             </p>
             {status?.state === "failed" && status.error && (
@@ -184,7 +184,7 @@ export function GlobalSettingsDialog() {
 
           <div className="border-t border-border pt-3">
             <div className="mb-1.5 flex items-center justify-between gap-2">
-              <Label>Command-line tool (kira)</Label>
+              <Label>Command-line tool (kira-ftp)</Label>
               {cli.installed && (
                 <span className="flex shrink-0 items-center gap-1 text-xs text-emerald-500">
                   <Check className="size-3.5" /> Installed
@@ -192,7 +192,7 @@ export function GlobalSettingsDialog() {
               )}
             </div>
             <p className="mb-2 text-[11px] text-muted-foreground">
-              A small <code>kira</code> script editors call to upload/download/sync the
+              A small <code>kira-ftp</code> script editors call to upload/download/sync the
               current file. Pick a folder on your PATH (e.g. <code>~/.local/bin</code>).
             </p>
             {cli.installed && cli.path && (
@@ -215,7 +215,7 @@ export function GlobalSettingsDialog() {
           <div className="border-t border-border pt-3">
             <Label>Editor integration</Label>
             <p className="mb-2 text-[11px] text-muted-foreground">
-              Install shortcuts that call the <code>kira</code> CLI to upload/download/sync
+              Install shortcuts that call the <code>kira-ftp</code> CLI to upload/download/sync
               the current file. Install the CLI above first.
             </p>
             <div className="grid gap-1.5">
