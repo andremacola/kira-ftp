@@ -46,15 +46,3 @@ export function openDatabase(path: string): Database {
   db = database;
   return db;
 }
-
-/** Get the already-opened handle, throwing if openDatabase wasn't called. */
-export function getDatabase(): Database {
-  if (!db) throw new Error("Database not opened. Call openDatabase() first.");
-  return db;
-}
-
-/** For tests / shutdown. */
-export function closeDatabase(): void {
-  db?.close();
-  db = null;
-}

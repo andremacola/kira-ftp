@@ -11,7 +11,7 @@ import { appDataDir } from "../paths";
 import type { AppContext } from "../app-context";
 import { PathResolver, type ResolvedTarget } from "../services/path-resolver";
 import { rulesToRcloneFilters } from "../util/ignore";
-import { joinRemote, dirnameRemote } from "../connections/transport";
+import { dirnameRemote } from "../connections/transport";
 
 export const DEFAULT_CONTROL_PORT = 8911;
 

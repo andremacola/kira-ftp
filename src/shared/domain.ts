@@ -110,9 +110,6 @@ export interface FileEntry {
   linkTarget?: string | null;
 }
 
-/** Direction of a transfer/sync operation. */
-export type TransferDirection = "upload" | "download";
-
 export type TransferKind =
   | "upload"
   | "download"

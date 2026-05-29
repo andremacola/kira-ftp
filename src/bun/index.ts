@@ -420,6 +420,19 @@ function quitApp(): void {
   void gracefulShutdown().finally(() => process.exit(0));
 }
 
+// Bridge core events -> webview messages. Registered ONCE; the window can be
+// destroyed and recreated, so resolve the live channel at emit time (no-op when
+// there's no window) rather than capturing a stale per-window channel.
+function wireBus(): void {
+  const channel = () => win?.webview?.rpc as typeof rpc | undefined;
+  ctx.bus.on("transfer:update", (job) => channel()?.send.transferUpdate(job));
+  ctx.bus.on("transfer:done", (job) => channel()?.send.transferDone(job));
+  ctx.bus.on("transfer:error", (e) => channel()?.send.transferError(e));
+  ctx.bus.on("connection:state", (s) => channel()?.send.connectionState(s));
+  ctx.bus.on("watch:event", (e) => channel()?.send.watchEvent(e));
+  ctx.bus.on("log", (l) => channel()?.send.log(l));
+}
+
 function createMainWindow(): void {
   win = new BrowserWindow({
     title: "Kira FTP",
@@ -433,16 +446,6 @@ function createMainWindow(): void {
     rpc,
   });
   setDock(true); // window visible -> Regular (Dock icon, native minimize)
-
-  const channel = win.webview.rpc as typeof rpc | undefined;
-  if (channel) {
-    ctx.bus.on("transfer:update", (job) => channel.send.transferUpdate(job));
-    ctx.bus.on("transfer:done", (job) => channel.send.transferDone(job));
-    ctx.bus.on("transfer:error", (e) => channel.send.transferError(e));
-    ctx.bus.on("connection:state", (s) => channel.send.connectionState(s));
-    ctx.bus.on("watch:event", (e) => channel.send.watchEvent(e));
-    ctx.bus.on("log", (l) => channel.send.log(l));
-  }
 
   // Persist the frame as the user moves/resizes so we restore it next time.
   const remember = () => {
@@ -484,6 +487,7 @@ const menubar = new MenubarManager(
 );
 menubar.init();
 if (showInMenuBar()) menubar.setVisible(true);
+wireBus();
 showWindow();
 
 // Graceful shutdown: signals can await async cleanup; the bare exit handler
