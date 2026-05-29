@@ -1,0 +1,8 @@
+// Merge into Packages/User/Default (OSX).sublime-keymap
+[
+  { "keys": ["super+alt+u"], "command": "kira_ftp", "args": { "action": "upload" } },
+  { "keys": ["super+alt+d"], "command": "kira_ftp", "args": { "action": "download" } },
+  { "keys": ["super+alt+up"], "command": "kira_ftp", "args": { "action": "sync-up" } },
+  { "keys": ["super+alt+down"], "command": "kira_ftp", "args": { "action": "sync-down" } },
+  { "keys": ["super+alt+s"], "command": "kira_ftp", "args": { "action": "sync" } }
+]

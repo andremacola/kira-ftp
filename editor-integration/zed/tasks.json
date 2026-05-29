@@ -1,0 +1,33 @@
+// .zed/tasks.json — run from the command palette ("task: spawn") or bind keys.
+[
+  {
+    "label": "Kira: Upload",
+    "command": "kira upload \"$ZED_FILE\"",
+    "use_new_terminal": false,
+    "reveal": "never"
+  },
+  {
+    "label": "Kira: Download",
+    "command": "kira download \"$ZED_FILE\"",
+    "use_new_terminal": false,
+    "reveal": "never"
+  },
+  {
+    "label": "Kira: Sync up",
+    "command": "kira sync-up \"$ZED_FILE\"",
+    "use_new_terminal": false,
+    "reveal": "on_failure"
+  },
+  {
+    "label": "Kira: Sync down",
+    "command": "kira sync-down \"$ZED_FILE\"",
+    "use_new_terminal": false,
+    "reveal": "on_failure"
+  },
+  {
+    "label": "Kira: Sync both",
+    "command": "kira sync \"$ZED_FILE\"",
+    "use_new_terminal": false,
+    "reveal": "on_failure"
+  }
+]

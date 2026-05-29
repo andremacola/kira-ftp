@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Kira: Upload current file",
+      "type": "shell",
+      "command": "kira upload \"${file}\"",
+      "presentation": { "reveal": "silent", "panel": "shared", "close": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Kira: Download current file",
+      "type": "shell",
+      "command": "kira download \"${file}\"",
+      "presentation": { "reveal": "silent", "panel": "shared", "close": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Kira: Sync up (folder of current file)",
+      "type": "shell",
+      "command": "kira sync-up \"${file}\"",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Kira: Sync down (folder of current file)",
+      "type": "shell",
+      "command": "kira sync-down \"${file}\"",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Kira: Sync both (folder of current file)",
+      "type": "shell",
+      "command": "kira sync \"${file}\"",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    }
+  ]
+}

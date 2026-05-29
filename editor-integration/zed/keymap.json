@@ -1,0 +1,13 @@
+// Merge into ~/.config/zed/keymap.json. Binds keys to the tasks above by label.
+[
+  {
+    "context": "Workspace",
+    "bindings": {
+      "cmd-alt-u": ["task::Spawn", { "task_name": "Kira: Upload" }],
+      "cmd-alt-d": ["task::Spawn", { "task_name": "Kira: Download" }],
+      "cmd-alt-up": ["task::Spawn", { "task_name": "Kira: Sync up" }],
+      "cmd-alt-down": ["task::Spawn", { "task_name": "Kira: Sync down" }],
+      "cmd-alt-s": ["task::Spawn", { "task_name": "Kira: Sync both" }]
+    }
+  }
+]

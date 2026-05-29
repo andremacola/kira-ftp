@@ -1,0 +1,29 @@
+// Merge into your global keybindings.json (Cmd+Shift+P → "Open Keyboard Shortcuts (JSON)").
+// These run the tasks from .vscode/tasks.json by label.
+[
+  {
+    "key": "cmd+alt+u",
+    "command": "workbench.action.tasks.runTask",
+    "args": "Kira: Upload current file"
+  },
+  {
+    "key": "cmd+alt+d",
+    "command": "workbench.action.tasks.runTask",
+    "args": "Kira: Download current file"
+  },
+  {
+    "key": "cmd+alt+up",
+    "command": "workbench.action.tasks.runTask",
+    "args": "Kira: Sync up (folder of current file)"
+  },
+  {
+    "key": "cmd+alt+down",
+    "command": "workbench.action.tasks.runTask",
+    "args": "Kira: Sync down (folder of current file)"
+  },
+  {
+    "key": "cmd+alt+s",
+    "command": "workbench.action.tasks.runTask",
+    "args": "Kira: Sync both (folder of current file)"
+  }
+]
