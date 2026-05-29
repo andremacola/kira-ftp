@@ -236,6 +236,28 @@ export type KiraRPC = {
         params: { target: string };
         response: { ok: boolean; cancelled?: boolean; message: string };
       };
+      /* rmate server (remote editing) */
+      rmateStatus: {
+        params: Record<string, never>;
+        response: {
+          state: "running" | "stopped" | "failed";
+          bind: string;
+          editor: string;
+          error: string | null;
+        };
+      };
+      rmateEditors: {
+        params: Record<string, never>;
+        response: Array<{ id: string; name: string; detected: boolean }>;
+      };
+      rmateSetEnabled: {
+        params: { on: boolean };
+        response: { state: "running" | "stopped" | "failed"; bind: string; editor: string; error: string | null };
+      };
+      rmateSetEditor: {
+        params: { editor: string };
+        response: { state: "running" | "stopped" | "failed"; bind: string; editor: string; error: string | null };
+      };
       pickDirectory: { params: Record<string, never>; response: string | null };
       pickFile: { params: Record<string, never>; response: string | null };
       pickSftpConfig: { params: Record<string, never>; response: string | null };

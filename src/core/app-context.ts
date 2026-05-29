@@ -24,6 +24,7 @@ import { SyncService } from "./services/sync-service";
 import { WatcherService } from "./services/watcher-service";
 import { VcsService } from "./services/vcs-service";
 import { EditorIntegrationService } from "./services/editor-integration";
+import { RmateService, type RmateEditor } from "./services/rmate-service";
 import { compileRules, DEFAULT_IGNORE_PATTERNS } from "./util/ignore";
 import type {
   Connection,
@@ -81,6 +82,7 @@ export class AppContext {
   readonly watcher: WatcherService;
   readonly vcs: VcsService;
   readonly editors: EditorIntegrationService;
+  readonly rmate: RmateService;
 
   constructor(dbPath = databasePath()) {
     this.db = openDatabase(dbPath);
@@ -102,6 +104,12 @@ export class AppContext {
     this.editors = new EditorIntegrationService(undefined, {
       get: () => this.settings.get("cliPath"),
       set: (p) => this.settings.set("cliPath", p),
+    });
+    this.rmate = new RmateService({
+      getEditor: () => (this.settings.get("rmateEditor") as RmateEditor | null) ?? null,
+      setEditor: (e) => this.settings.set("rmateEditor", e),
+      getEnabled: () => this.settings.getBool("rmateEnabled", false),
+      setEnabled: (on) => this.settings.setBool("rmateEnabled", on),
     });
     this.watcher = new WatcherService({
       upload: (conn, localPath, remotePath) =>
@@ -267,9 +275,15 @@ export class AppContext {
     })();
   }
 
-  /** Graceful shutdown: stop watchers, rclone, and pooled connections. */
+  /** Start the rmate server on boot if the user left it enabled. */
+  startRmateIfEnabled(): void {
+    if (this.settings.getBool("rmateEnabled", false)) this.rmate.start();
+  }
+
+  /** Graceful shutdown: stop watchers, rmate, rclone, and pooled connections. */
   async shutdown(): Promise<void> {
     this.watcher.stopAll();
+    this.rmate.killSync();
     await this.pool.closeAll();
     await this.rclone.stop();
   }

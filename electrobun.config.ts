@@ -14,6 +14,8 @@ export default {
       "dist/index.html": "views/mainview/index.html",
       "dist/assets": "views/mainview/assets",
       "dist/menubar": "views/mainview/menubar",
+      // bundled rmate server + editor wrappers, resolved via import.meta.dir/rmate
+      "bin/rmate": "bun/rmate",
     },
     watchIgnore: ["dist/**"],
     // Use a prebuilt .iconset (converted via iconutil) instead of an Icon

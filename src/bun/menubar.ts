@@ -48,7 +48,10 @@ export class MenubarManager {
       this.tray.on("tray-clicked", (e) => {
         const action = (e as { action?: string } | undefined)?.action;
         if (action === "quit") this.onQuit();
-        else this.onOpen();
+        else if (action === "rmate-toggle") {
+          this.ctx.rmate.setEnabled(!this.ctx.rmate.isRunning());
+          this.tray?.setMenu(this.menu()); // refresh the label
+        } else this.onOpen();
       });
     } catch {
       this.tray = null; // tray unavailable (rare) — app still works
@@ -79,8 +82,15 @@ export class MenubarManager {
   private menu() {
     // Tray menus dispatch via `action` (the click handler reads it); `role` is
     // not honored on tray items, so Quit uses an action we handle ourselves.
+    const rmateOn = this.ctx.rmate.isRunning();
     return [
       { type: "normal" as const, label: "Open Kira FTP", action: "open" },
+      { type: "divider" as const },
+      {
+        type: "normal" as const,
+        label: rmateOn ? "Stop rmate server" : "Start rmate server",
+        action: "rmate-toggle",
+      },
       { type: "divider" as const },
       { type: "normal" as const, label: "Quit Kira FTP", action: "quit" },
     ];

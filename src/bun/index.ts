@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { join, basename, dirname } from "node:path";
 import { readFileSync, statSync } from "node:fs";
 import { AppContext } from "../core/app-context";
+import { RMATE_EDITORS } from "../core/services/rmate-service";
 import { ControlServer } from "../core/control/server";
 import { MenubarManager } from "./menubar";
 import { joinRemote } from "../core/connections/transport";
@@ -21,6 +22,9 @@ const ctx = new AppContext();
 // Local control server for the external `kira` CLI (editor integrations).
 const control = new ControlServer(ctx);
 control.start();
+
+// Resume the rmate server if the user left it enabled.
+ctx.startRmateIfEnabled();
 
 function getConn(id: number): Connection {
   const conn = ctx.connections.get(id);
@@ -244,6 +248,14 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
         const cancelled = !r.ok && /cancel/i.test(r.message);
         return { ok: r.ok, cancelled, message: r.message };
       },
+      rmateStatus: () => ctx.rmate.status(),
+      rmateEditors: () => {
+        const detected = ctx.rmate.detectedEditors();
+        return RMATE_EDITORS.map((e) => ({ ...e, detected: detected[e.id] }));
+      },
+      rmateSetEnabled: ({ on }) => ctx.rmate.setEnabled(on),
+      rmateSetEditor: ({ editor }) =>
+        ctx.rmate.setEditor(editor as Parameters<typeof ctx.rmate.setEditor>[0]),
       setControlPort: ({ port }) => {
         if (!Number.isInteger(port) || port < 1024 || port > 65535) {
           return { ok: false, error: "Port must be between 1024 and 65535" };
@@ -369,6 +381,7 @@ process.on("exit", () => {
   control.stop();
   menubar.dispose();
   ctx.watcher.stopAll();
+  ctx.rmate.killSync();
   ctx.rclone.killSync();
 });
 

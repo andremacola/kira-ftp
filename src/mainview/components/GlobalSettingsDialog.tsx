@@ -44,10 +44,20 @@ export function GlobalSettingsDialog() {
   >([]);
   const [cliTarget, setCliTarget] = useState("local");
   const [cliMsg, setCliMsg] = useState<string | null>(null);
+  const [rmate, setRmate] = useState<{
+    state: "running" | "stopped" | "failed";
+    bind: string;
+    editor: string;
+    error: string | null;
+  } | null>(null);
+  const [rmateEditors, setRmateEditors] = useState<
+    Array<{ id: string; name: string; detected: boolean }>
+  >([]);
 
   const refreshStatus = () => api.getControlStatus({}).then(setStatus);
   const refreshEditors = () => api.editorStatus({}).then(setEditors);
   const refreshCli = () => api.cliStatus({}).then(setCli);
+  const refreshRmate = () => api.rmateStatus({}).then(setRmate);
 
   useEffect(() => {
     if (!open) return;
@@ -58,6 +68,8 @@ export function GlobalSettingsDialog() {
     void refreshEditors();
     void refreshCli();
     void api.cliTargets({}).then(setCliTargets);
+    void refreshRmate();
+    void api.rmateEditors({}).then(setRmateEditors);
     setEditorMsg({});
     setCliMsg(null);
     setPortError(null);
@@ -77,6 +89,15 @@ export function GlobalSettingsDialog() {
     } catch (e) {
       setCliMsg(`Failed: ${(e as Error).message}`);
     }
+  };
+
+  const toggleRmate = async (on: boolean) => {
+    const s = await api.rmateSetEnabled({ on });
+    setRmate(s);
+  };
+  const changeRmateEditor = async (editor: string) => {
+    const s = await api.rmateSetEditor({ editor });
+    setRmate(s);
   };
 
   const installEditor = async (id: string) => {
@@ -274,6 +295,59 @@ export function GlobalSettingsDialog() {
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="border-t border-border pt-3">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <Label>Remote editing (rmate)</Label>
+              {rmate && (
+                <span
+                  className={`flex items-center gap-1.5 text-xs ${statusMeta(
+                    rmate.state === "running" ? "active" : rmate.state,
+                  ).text}`}
+                >
+                  <span
+                    className={`size-2 rounded-full ${statusMeta(
+                      rmate.state === "running" ? "active" : rmate.state,
+                    ).dot}`}
+                  />
+                  {rmate.state === "running" ? `Listening on ${rmate.bind}` : rmate.state}
+                </span>
+              )}
+            </div>
+            <p className="mb-2 text-[11px] text-muted-foreground">
+              Run <code>rmate &lt;file&gt;</code> on a server (over{" "}
+              <code>ssh -R 52698:localhost:52698</code>) to open it in your local editor and
+              save it back.
+            </p>
+            {rmate?.state === "failed" && rmate.error && (
+              <p className="mb-1.5 rounded bg-destructive/10 px-2 py-1 text-[11px] text-destructive">
+                {rmate.error}
+              </p>
+            )}
+            <div className="flex items-center gap-2">
+              <span className="flex-1 text-[13px]">Enable rmate server</span>
+              <Switch
+                checked={rmate?.state === "running"}
+                onCheckedChange={(v) => void toggleRmate(v)}
+              />
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="w-24 text-[13px] text-muted-foreground">Open in</span>
+              <Select value={rmate?.editor ?? "zed"} onValueChange={(v) => void changeRmateEditor(v)}>
+                <SelectTrigger className="h-8 w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {rmateEditors.map((e) => (
+                    <SelectItem key={e.id} value={e.id} disabled={!e.detected}>
+                      {e.name}
+                      {!e.detected ? " (not found)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
