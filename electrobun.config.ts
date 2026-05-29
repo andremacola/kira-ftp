@@ -7,7 +7,7 @@ export default {
   app: {
     name: "Kira FTP",
     identifier: "com.kira.ftp",
-    version: "0.1.0",
+    version: "0.2.0",
   },
   build: {
     copy: {
