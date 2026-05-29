@@ -5,7 +5,6 @@ import { useStore } from "../store";
 import { useUi } from "../ui-store";
 import { api } from "../lib/rpc";
 import { useEffect, useState } from "react";
-import logo from "../logo.png";
 
 export function TopBar() {
   const activeProject = useStore((s) => s.activeProject);
@@ -48,10 +47,7 @@ export function TopBar() {
 
   return (
     <header className="electrobun-webkit-app-region-drag flex h-11 shrink-0 items-center gap-2 border-b border-border bg-sidebar pl-20 pr-3">
-      <div className="flex items-center gap-2 font-semibold tracking-tight">
-        <img src={logo} alt="" className="size-5 rounded-[5px]" />
-        Kira FTP
-      </div>
+      <div className="font-semibold tracking-tight">Kira FTP</div>
 
       {activeProject && (
         <div className="ml-2 flex items-center gap-2 text-xs text-muted-foreground">
