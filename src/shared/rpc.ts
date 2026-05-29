@@ -214,6 +214,15 @@ export type KiraRPC = {
           error: string | null;
         };
       };
+      /* editor integration */
+      editorStatus: {
+        params: Record<string, never>;
+        response: Array<{ id: string; name: string; detected: boolean; installed: boolean }>;
+      };
+      installEditorIntegration: {
+        params: { id: string };
+        response: { ok: boolean; alreadyInstalled: boolean; message: string };
+      };
       pickDirectory: { params: Record<string, never>; response: string | null };
       pickFile: { params: Record<string, never>; response: string | null };
       pickSftpConfig: { params: Record<string, never>; response: string | null };

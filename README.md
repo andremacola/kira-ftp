@@ -1,11 +1,8 @@
 # Kira FTP
 
-A standalone macOS SFTP/FTP/FTPS client that recreates the full feature set of
-the Sublime Text SFTP plugin as a modern desktop app.
+A standalone macOS SFTP/FTP/FTPS client that recreates the full feature set of the Sublime Text SFTP plugin as a modern desktop app.
 
-Built with **Electrobun + Bun + React 19 + shadcn-style UI**, a hybrid transfer
-engine (**ssh2 / basic-ftp** for interactive ops, **rclone** for bulk
-transfer/sync), and **SQLite** for persistence.
+Built with **Electrobun + Bun + React 19 + shadcn-style UI**, a hybrid transfer engine (**ssh2 / basic-ftp** for interactive ops, **rclone** for bulk transfer/sync), and **SQLite** for persistence.
 
 ## Architecture
 

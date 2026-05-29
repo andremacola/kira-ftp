@@ -7,6 +7,7 @@ import type {
   ConnectionFields,
   ProjectInput,
 } from "../../shared/domain";
+import { parseJsonc } from "../util/jsonc";
 
 /** Subset of Sublime SFTP config keys we understand. */
 interface SublimeConfig {
@@ -46,66 +47,6 @@ export interface ImportResult {
 
 function pick<T>(value: T | undefined, fallback: T): T {
   return value === undefined ? fallback : value;
-}
-
-/**
- * Parse JSONC: Sublime's sftp-config.json allows `//` and block comments plus
- * trailing commas. We strip comments with a string-aware scan (so `//` or `*​/`
- * inside string values are preserved), then drop trailing commas.
- */
-function parseJsonc(input: string): unknown {
-  const text = input.replace(/^﻿/, ""); // strip BOM
-  let out = "";
-  let inStr = false;
-  let inLine = false;
-  let inBlock = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i]!;
-    const n = text[i + 1];
-    if (inLine) {
-      if (c === "\n") {
-        inLine = false;
-        out += c;
-      }
-      continue;
-    }
-    if (inBlock) {
-      if (c === "*" && n === "/") {
-        inBlock = false;
-        i++;
-      }
-      continue;
-    }
-    if (inStr) {
-      out += c;
-      if (c === "\\") {
-        out += text[i + 1] ?? ""; // keep escaped char verbatim
-        i++;
-      } else if (c === '"') {
-        inStr = false;
-      }
-      continue;
-    }
-    if (c === '"') {
-      inStr = true;
-      out += c;
-      continue;
-    }
-    if (c === "/" && n === "/") {
-      inLine = true;
-      i++;
-      continue;
-    }
-    if (c === "/" && n === "*") {
-      inBlock = true;
-      i++;
-      continue;
-    }
-    out += c;
-  }
-  // drop trailing commas before } or ]
-  out = out.replace(/,(\s*[}\]])/g, "$1");
-  return JSON.parse(out);
 }
 
 export function parseSublimeConfig(text: string, localPath: string): ImportResult {

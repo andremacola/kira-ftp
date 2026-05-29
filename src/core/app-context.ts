@@ -23,6 +23,7 @@ import { TransferManager } from "./services/transfer-manager";
 import { SyncService } from "./services/sync-service";
 import { WatcherService } from "./services/watcher-service";
 import { VcsService } from "./services/vcs-service";
+import { EditorIntegrationService } from "./services/editor-integration";
 import { compileRules, DEFAULT_IGNORE_PATTERNS } from "./util/ignore";
 import type {
   Connection,
@@ -79,6 +80,7 @@ export class AppContext {
   readonly sync: SyncService;
   readonly watcher: WatcherService;
   readonly vcs: VcsService;
+  readonly editors = new EditorIntegrationService();
 
   constructor(dbPath = databasePath()) {
     this.db = openDatabase(dbPath);

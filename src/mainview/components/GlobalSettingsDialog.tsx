@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ScrollText } from "lucide-react";
+import { ScrollText, Check } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -30,8 +30,13 @@ export function GlobalSettingsDialog() {
   const [status, setStatus] = useState<
     { state: "active" | "stopped" | "failed"; port: number; error: string | null } | null
   >(null);
+  const [editors, setEditors] = useState<
+    Array<{ id: string; name: string; detected: boolean; installed: boolean }>
+  >([]);
+  const [editorMsg, setEditorMsg] = useState<Record<string, string>>({});
 
   const refreshStatus = () => api.getControlStatus({}).then(setStatus);
+  const refreshEditors = () => api.editorStatus({}).then(setEditors);
 
   useEffect(() => {
     if (!open) return;
@@ -39,9 +44,17 @@ export function GlobalSettingsDialog() {
     void api.getNotifySound({}).then(setNotifySound);
     void api.getControlPort({}).then((p) => setPort(String(p)));
     void refreshStatus();
+    void refreshEditors();
+    setEditorMsg({});
     setPortError(null);
     setPortSaved(false);
   }, [open]);
+
+  const installEditor = async (id: string) => {
+    const res = await api.installEditorIntegration({ id });
+    setEditorMsg((m) => ({ ...m, [id]: res.message }));
+    await refreshEditors();
+  };
 
   const savePort = async () => {
     setPortError(null);
@@ -61,7 +74,7 @@ export function GlobalSettingsDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>Application-wide preferences.</DialogDescription>
@@ -135,6 +148,45 @@ export function GlobalSettingsDialog() {
               </Button>
               {portSaved && <span className="text-xs text-emerald-500">Saved</span>}
               {portError && <span className="text-xs text-destructive">{portError}</span>}
+            </div>
+          </div>
+
+          <div className="border-t border-border pt-3">
+            <Label>Editor integration</Label>
+            <p className="mb-2 text-[11px] text-muted-foreground">
+              Install shortcuts that call the <code>kira</code> CLI (upload/download/sync
+              the current file). Requires <code>kira</code> on your PATH.
+            </p>
+            <div className="grid gap-1.5">
+              {editors.map((ed) => (
+                <div key={ed.id} className="flex items-center gap-2">
+                  <span className="flex w-40 items-center gap-1.5 text-[13px]">
+                    {ed.name}
+                    {!ed.detected && (
+                      <span className="text-[10px] text-muted-foreground">(not found)</span>
+                    )}
+                  </span>
+                  {ed.installed ? (
+                    <span className="flex items-center gap-1 text-xs text-emerald-500">
+                      <Check className="size-3.5" /> Installed
+                    </span>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!ed.detected}
+                      onClick={() => void installEditor(ed.id)}
+                    >
+                      Install
+                    </Button>
+                  )}
+                  {editorMsg[ed.id] && (
+                    <span className="flex-1 truncate text-[11px] text-muted-foreground">
+                      {editorMsg[ed.id]}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         </div>
