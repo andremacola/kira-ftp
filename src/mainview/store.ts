@@ -12,6 +12,7 @@ import type {
   FileEntry,
   LogLine,
   Project,
+  SessionState,
   TransferJob,
 } from "@shared/domain";
 
@@ -47,6 +48,42 @@ const parentOf = (p: string) => {
   const i = t.lastIndexOf("/");
   return i <= 0 ? (t.startsWith("/") ? "/" : t) : t.slice(0, i);
 };
+
+// Persist the open session (debounced) so a close-to-menu-bar can restore it.
+// A real Quit/⌘Q clears it in the main process, so this just mirrors live state.
+let sessionTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleSessionSave(read: () => AppState): void {
+  if (sessionTimer) clearTimeout(sessionTimer);
+  sessionTimer = setTimeout(() => {
+    const s = read();
+    const session: SessionState = {
+      projectId: s.activeProject?.id ?? null,
+      relPath: s.relPath,
+      localPath: s.local.path,
+    };
+    void api.setSession({ session });
+  }, 400);
+}
+
+/** Restore the last session on launch, falling back to the home directory. */
+async function restoreSession(
+  read: () => AppState,
+  saved: SessionState | null,
+): Promise<void> {
+  if (saved?.projectId != null) {
+    const project = read().projects.find((p) => p.id === saved.projectId);
+    if (project) {
+      await read().openProject(project);
+      if (saved.relPath && read().mapped) {
+        useStore.setState({ relPath: saved.relPath });
+        await read().refreshBoth();
+      }
+      return;
+    }
+  }
+  const home = await api.homeDir({});
+  await read().navigate("local", saved?.localPath || home);
+}
 
 interface AppState {
   connections: Connection[];
@@ -142,9 +179,9 @@ export const useStore = create<AppState>((set, get) => ({
 
     await Promise.all([get().refreshConnections(), get().refreshProjects()]);
     const transfers = await api.listTransfers({});
-    const home = await api.homeDir({});
     set({ transfers });
-    await get().navigate("local", home);
+    const saved = await api.getSession({});
+    await restoreSession(get, saved);
   },
 
   refreshConnections: async () => {
@@ -250,6 +287,8 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err) {
       set((s) => ({ [pane]: { ...s[pane], entries: [], loading: false, error: (err as Error).message } }) as Partial<AppState>);
     }
+    // Mirror the new location into the persisted session.
+    scheduleSessionSave(get);
   },
 
   refreshBoth: async () => {

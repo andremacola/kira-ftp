@@ -17,6 +17,7 @@ import type {
   LogLine,
   Project,
   ProjectInput,
+  SessionState,
   SyncPlan,
   TransferHistoryEntry,
   TransferJob,
@@ -195,6 +196,10 @@ export type KiraRPC = {
       /* config import + history + dialogs */
       importSublimeConfig: { params: { localPath: string }; response: Project };
       recentHistory: { params: Record<string, never>; response: TransferHistoryEntry[] };
+
+      /* last-open session (restored when closed to the menu bar) */
+      getSession: { params: Record<string, never>; response: SessionState | null };
+      setSession: { params: { session: SessionState }; response: void };
 
       /* global app preferences */
       getShowInMenuBar: { params: Record<string, never>; response: boolean };

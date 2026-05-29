@@ -499,4 +499,8 @@ export class SettingsRepo {
   setBool(key: string, value: boolean): void {
     this.set(key, value ? "1" : "0");
   }
+
+  delete(key: string): void {
+    this.db.query("DELETE FROM app_settings WHERE key = ?").run(key);
+  }
 }

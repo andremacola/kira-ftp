@@ -14,7 +14,7 @@ import { MenubarManager } from "./menubar";
 import { joinRemote } from "../core/connections/transport";
 import { rulesToRcloneFilters } from "../core/util/ignore";
 import { parseSublimeConfig } from "../core/services/config-importer";
-import type { Connection } from "../shared/domain";
+import type { Connection, SessionState } from "../shared/domain";
 import type { KiraRPC } from "../shared/rpc";
 
 const ctx = new AppContext();
@@ -230,6 +230,16 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
         return ctx.projects.get(project.id)!;
       },
       recentHistory: () => ctx.history.recent(),
+      getSession: (): SessionState | null => {
+        const raw = ctx.settings.get("session");
+        if (!raw) return null;
+        try {
+          return JSON.parse(raw) as SessionState;
+        } catch {
+          return null;
+        }
+      },
+      setSession: ({ session }) => ctx.settings.set("session", JSON.stringify(session)),
       getShowInMenuBar: () => showInMenuBar(),
       setShowInMenuBar: ({ on }) => {
         ctx.settings.setBool("showInMenuBar", on);
@@ -404,6 +414,12 @@ function setDock(visible: boolean): void {
   }
 }
 
+/** A real quit (tray "Quit" / ⌘Q): forget the session, then shut down. */
+function quitApp(): void {
+  ctx.settings.delete("session");
+  void gracefulShutdown().finally(() => process.exit(0));
+}
+
 function createMainWindow(): void {
   win = new BrowserWindow({
     title: "Kira FTP",
@@ -412,6 +428,8 @@ function createMainWindow(): void {
     // hiddenInset: native traffic lights over a full-size content view (the top
     // bar draws under them and is left-padded to clear the buttons).
     titleBarStyle: "hiddenInset",
+    // Center the native controls vertically in the 44px (h-11) top bar.
+    trafficLightOffset: { x: 8, y: 8 },
     rpc,
   });
   setDock(true); // window visible -> Regular (Dock icon, native minimize)
@@ -462,8 +480,7 @@ function showWindow(): void {
 const menubar = new MenubarManager(
   ctx,
   () => showWindow(), // "Open Kira FTP" — show (and restore) the window
-  // Quit from the tray: close pooled connections / rclone gracefully first.
-  () => void gracefulShutdown().finally(() => process.exit(0)),
+  () => quitApp(), // "Quit Kira FTP" — clears the session, then shuts down
 );
 menubar.init();
 if (showInMenuBar()) menubar.setVisible(true);
@@ -499,7 +516,8 @@ ApplicationMenu.setApplicationMenu([
       { role: "hideOthers" },
       { role: "showAll" },
       { type: "divider" },
-      { role: "quit", accelerator: "CommandOrControl+Q" },
+      // Custom action (not role:"quit") so we can clear the session before exit.
+      { label: "Quit Kira FTP", action: "quit", accelerator: "CommandOrControl+Q" },
     ],
   },
   {
@@ -523,5 +541,11 @@ ApplicationMenu.setApplicationMenu([
     ],
   },
 ]);
+
+// ⌘Q (and the Quit item) route here so we can drop the session before exiting.
+ApplicationMenu.on("application-menu-clicked", (e) => {
+  const action = (e as { data?: { action?: string } } | undefined)?.data?.action;
+  if (action === "quit") quitApp();
+});
 
 console.log("Kira FTP main process started");

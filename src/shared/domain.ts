@@ -202,3 +202,15 @@ export interface LogLine {
   at: string;
   connectionId?: number;
 }
+
+/**
+ * Last-open UI session, restored on launch when the app was closed to the menu
+ * bar (a real Quit/⌘Q clears it). Captures the open project and current folder.
+ */
+export interface SessionState {
+  projectId: number | null;
+  /** Mapped-mode relative path under the project roots. */
+  relPath: string;
+  /** Current local pane path (used when no project is open). */
+  localPath: string;
+}
