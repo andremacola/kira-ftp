@@ -12,6 +12,7 @@ import {
   EnvironmentsRepo,
   IgnoreRulesRepo,
   HistoryRepo,
+  SettingsRepo,
 } from "./db/repositories";
 import { ConnectionPool } from "./connections/pool";
 import { RcloneClient } from "./rclone/client";
@@ -70,6 +71,7 @@ export class AppContext {
   readonly environments: EnvironmentsRepo;
   readonly ignoreRules: IgnoreRulesRepo;
   readonly history: HistoryRepo;
+  readonly settings: SettingsRepo;
 
   readonly connectionService: ConnectionService;
   readonly fileService: FileService;
@@ -86,6 +88,7 @@ export class AppContext {
     this.environments = new EnvironmentsRepo(this.db);
     this.ignoreRules = new IgnoreRulesRepo(this.db);
     this.history = new HistoryRepo(this.db);
+    this.settings = new SettingsRepo(this.db);
 
     this.connectionService = new ConnectionService(this.connections, this.pool);
     this.fileService = new FileService(this.pool);

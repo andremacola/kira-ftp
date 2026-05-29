@@ -468,3 +468,35 @@ export class HistoryRepo {
     }));
   }
 }
+
+/* ---------------------------- app settings ------------------------------ */
+
+/** Simple key/value store for app-wide preferences. */
+export class SettingsRepo {
+  constructor(private db: Database) {}
+
+  get(key: string): string | null {
+    const row = this.db
+      .query("SELECT value FROM app_settings WHERE key = ?")
+      .get(key) as { value: string } | null;
+    return row ? row.value : null;
+  }
+
+  getBool(key: string, fallback: boolean): boolean {
+    const v = this.get(key);
+    return v === null ? fallback : v === "1";
+  }
+
+  set(key: string, value: string): void {
+    this.db
+      .query(
+        "INSERT INTO app_settings(key, value) VALUES(?, ?) " +
+          "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      )
+      .run(key, value);
+  }
+
+  setBool(key: string, value: boolean): void {
+    this.set(key, value ? "1" : "0");
+  }
+}

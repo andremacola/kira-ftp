@@ -9,6 +9,7 @@ import { join, basename, dirname } from "node:path";
 import { readFileSync, statSync } from "node:fs";
 import { AppContext } from "../core/app-context";
 import { ControlServer } from "../core/control/server";
+import { MenubarManager } from "./menubar";
 import { joinRemote } from "../core/connections/transport";
 import { rulesToRcloneFilters } from "../core/util/ignore";
 import { parseSublimeConfig } from "../core/services/config-importer";
@@ -225,6 +226,8 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
         return ctx.projects.get(project.id)!;
       },
       recentHistory: () => ctx.history.recent(),
+      getDockVisible: () => menubar.isDockVisible(),
+      setDockVisible: ({ visible }) => menubar.setDockVisible(visible),
       pickDirectory: () => pickPath({ directory: true }),
       pickFile: () => pickPath({ file: true }),
       // import accepts the .json file OR the folder that contains it
@@ -297,6 +300,18 @@ const win = new BrowserWindow({
   rpc,
 });
 
+// Menubar presence: tray icon that pulses during transfers, notifies on
+// completion, and honors the show-in-dock preference.
+const menubar = new MenubarManager(
+  ctx,
+  () => {
+    win.show();
+    win.focus();
+  },
+  () => process.exit(0),
+);
+menubar.init();
+
 /* Bridge core events -> webview messages. */
 const channel = win.webview.rpc;
 if (channel) {
@@ -320,6 +335,7 @@ process.on("SIGINT", () => void gracefulShutdown().finally(() => process.exit(0)
 process.on("SIGTERM", () => void gracefulShutdown().finally(() => process.exit(0)));
 process.on("exit", () => {
   control.stop();
+  menubar.dispose();
   ctx.watcher.stopAll();
   ctx.rclone.killSync();
 });

@@ -5,7 +5,7 @@
  */
 
 /** Bump when adding a migration. Each index in MIGRATIONS is one version. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /**
  * Ordered list of migrations. Index 0 -> version 1, etc.
@@ -102,5 +102,13 @@ export const MIGRATIONS: string[] = [
   );
 
   CREATE INDEX idx_conn_owner ON connections(owner_project_id);
+  `,
+
+  // v3: app-wide settings as a simple key/value store (e.g. menubar/dock prefs).
+  `
+  CREATE TABLE app_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
   `,
 ];

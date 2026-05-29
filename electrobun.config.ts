@@ -13,6 +13,7 @@ export default {
     copy: {
       "dist/index.html": "views/mainview/index.html",
       "dist/assets": "views/mainview/assets",
+      "dist/menubar-idle.png": "views/mainview/menubar-idle.png",
     },
     watchIgnore: ["dist/**"],
     // Use a prebuilt .iconset (converted via iconutil) instead of an Icon
