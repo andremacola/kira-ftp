@@ -10,6 +10,7 @@
     "build:stable": "vite build && electrobun build --env=stable",
     "dev": "vite build && electrobun dev",
     "dev:vite": "vite --port 5173",
+    "build:cli": "bun build --compile src/cli/kira.ts --outfile dist-cli/kira",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

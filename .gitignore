@@ -30,3 +30,6 @@ artifacts/
 
 # Chat exports
 docs/agent-sessions/*.txt
+
+# Compiled CLI binary
+dist-cli/

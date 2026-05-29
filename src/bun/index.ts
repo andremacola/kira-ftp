@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { join, basename, dirname } from "node:path";
 import { readFileSync, statSync } from "node:fs";
 import { AppContext } from "../core/app-context";
+import { ControlServer } from "../core/control/server";
 import { joinRemote } from "../core/connections/transport";
 import { rulesToRcloneFilters } from "../core/util/ignore";
 import { parseSublimeConfig } from "../core/services/config-importer";
@@ -15,6 +16,10 @@ import type { Connection } from "../shared/domain";
 import type { KiraRPC } from "../shared/rpc";
 
 const ctx = new AppContext();
+
+// Local control server for the external `kira` CLI (editor integrations).
+const control = new ControlServer(ctx);
+control.start();
 
 function getConn(id: number): Connection {
   const conn = ctx.connections.get(id);
@@ -314,6 +319,7 @@ async function gracefulShutdown(): Promise<void> {
 process.on("SIGINT", () => void gracefulShutdown().finally(() => process.exit(0)));
 process.on("SIGTERM", () => void gracefulShutdown().finally(() => process.exit(0)));
 process.on("exit", () => {
+  control.stop();
   ctx.watcher.stopAll();
   ctx.rclone.killSync();
 });
