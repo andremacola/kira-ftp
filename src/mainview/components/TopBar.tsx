@@ -1,4 +1,4 @@
-import { Command, Settings, FolderSync, GitBranch, Eye, EyeOff } from "lucide-react";
+import { Command, Settings, GitBranch, Eye, EyeOff } from "lucide-react";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -14,12 +14,10 @@ export function TopBar() {
   const environments = useStore((s) => s.environments);
   const switchEnvironment = useStore((s) => s.switchEnvironment);
   const connections = useStore((s) => s.connections);
+  const localRoot = useStore((s) => s.localRoot);
   const remoteRoot = useStore((s) => s.remoteRoot);
-  const local = useStore((s) => s.local);
-  const remote = useStore((s) => s.remote);
   const toggleCommandPalette = useUi((s) => s.toggleCommandPalette);
   const openSettings = useUi((s) => s.openSettings);
-  const showSyncPreview = useUi((s) => s.showSyncPreview);
   const [watching, setWatching] = useState(false);
 
   const conn = connections.find((c) => c.id === activeConnectionId) ?? null;
@@ -43,36 +41,13 @@ export function TopBar() {
     }
   };
 
-  const previewSync = async (direction: "up" | "down") => {
-    if (!activeProject || !activeConnectionId) return;
-    const plan = await api.previewSync({
-      connectionId: activeConnectionId,
-      projectId: activeProject.id,
-      localDir: local.path,
-      remoteDir: remote.path || remoteRoot,
-      direction,
-    });
-    showSyncPreview({
-      plan,
-      direction,
-      onRun: async () => {
-        await api.runSync({
-          connectionId: activeConnectionId,
-          projectId: activeProject.id,
-          localDir: local.path,
-          remoteDir: remote.path || remoteRoot,
-          direction,
-        });
-      },
-    });
-  };
-
+  // VCS changed-files are relative to the project root, so map root -> root.
   const uploadChanged = async () => {
     if (!activeProject || !activeConnectionId) return;
     await api.vcsUploadChanged({
       connectionId: activeConnectionId,
-      localDir: local.path,
-      remoteDir: remote.path || remoteRoot,
+      localDir: localRoot,
+      remoteDir: remoteRoot,
     });
   };
 
@@ -116,13 +91,7 @@ export function TopBar() {
       <div className="ml-auto flex items-center gap-1">
         {activeProject && activeConnectionId && (
           <>
-            <ToolbarButton tip="Sync Up (local → remote)" onClick={() => previewSync("up")}>
-              <FolderSync className="rotate-0" />
-            </ToolbarButton>
-            <ToolbarButton tip="Sync Down (remote → local)" onClick={() => previewSync("down")}>
-              <FolderSync className="-scale-x-100" />
-            </ToolbarButton>
-            <ToolbarButton tip="Upload changed (VCS)" onClick={uploadChanged}>
+            <ToolbarButton tip="Upload changed files (VCS)" onClick={uploadChanged}>
               <GitBranch />
             </ToolbarButton>
             <ToolbarButton

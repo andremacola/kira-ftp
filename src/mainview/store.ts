@@ -1,6 +1,8 @@
 /**
- * Central UI state (Zustand). Mirrors backend data and the two file panes,
- * and subscribes to main-process messages for live transfer/log updates.
+ * Central UI state (Zustand). In a project the two panes are *mapped*: they
+ * share a relative path from their roots (localRoot <-> remoteRoot), stay
+ * locked to those roots, and mirror each other. In connection-only mode the
+ * panes navigate freely. Subscribes to main-process messages for live updates.
  */
 import { create } from "zustand";
 import { api, onMessage } from "./lib/rpc";
@@ -31,6 +33,21 @@ const emptyPane = (): PaneState => ({
   selected: new Set(),
 });
 
+/** Join a root and a relative subpath using POSIX separators. */
+export function joinPath(root: string, rel: string): string {
+  const base = root.replace(/\/+$/, "");
+  if (!rel) return base === "" ? "/" : base;
+  return `${base}/${rel}`.replace(/\/{2,}/g, "/");
+}
+const appendRel = (rel: string, name: string) => (rel ? `${rel}/${name}` : name);
+const parentRel = (rel: string) =>
+  rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+const parentOf = (p: string) => {
+  const t = p.replace(/\/$/, "");
+  const i = t.lastIndexOf("/");
+  return i <= 0 ? (t.startsWith("/") ? "/" : t) : t.slice(0, i);
+};
+
 interface AppState {
   connections: Connection[];
   projects: Project[];
@@ -39,7 +56,12 @@ interface AppState {
   activeProject: Project | null;
   activeConnectionId: number | null;
   activeEnvironmentId: number | null;
+
+  /** Project mapping. mapped === true means panes are root-locked + mirrored. */
+  mapped: boolean;
+  localRoot: string;
   remoteRoot: string;
+  relPath: string;
 
   local: PaneState;
   remote: PaneState;
@@ -47,22 +69,24 @@ interface AppState {
   transfers: TransferJob[];
   logs: LogLine[];
 
-  /* bootstrap */
   init: () => Promise<void>;
   refreshConnections: () => Promise<void>;
   refreshProjects: () => Promise<void>;
 
-  /* project activation */
   openProject: (project: Project) => Promise<void>;
   openConnectionOnly: (connection: Connection, localStart?: string) => Promise<void>;
   switchEnvironment: (envId: number) => Promise<void>;
 
-  /* navigation */
+  /** Enter a directory entry (mapped: mirror both panes; free: that pane). */
+  enter: (pane: Pane, entry: FileEntry) => Promise<void>;
+  /** Go up one level (clamped to the root in mapped mode). */
+  goUp: (pane: Pane) => Promise<void>;
+  canGoUp: (pane: Pane) => boolean;
   navigate: (pane: Pane, path: string) => Promise<void>;
   refreshPane: (pane: Pane) => Promise<void>;
+  refreshBoth: () => Promise<void>;
   setSelected: (pane: Pane, selected: Set<string>) => void;
 
-  /* transfers */
   cancelTransfer: (jobId: string) => Promise<void>;
   clearFinished: () => Promise<void>;
 }
@@ -74,7 +98,10 @@ export const useStore = create<AppState>((set, get) => ({
   activeProject: null,
   activeConnectionId: null,
   activeEnvironmentId: null,
+  mapped: false,
+  localRoot: "",
   remoteRoot: "",
+  relPath: "",
   local: emptyPane(),
   remote: emptyPane(),
   transfers: [],
@@ -133,7 +160,14 @@ export const useStore = create<AppState>((set, get) => ({
       environments.find((e) => e.isDefault) ??
       environments[0];
     if (!env) {
-      set({ activeProject: project, environments, activeEnvironmentId: null });
+      set({
+        activeProject: project,
+        environments,
+        activeEnvironmentId: null,
+        mapped: false,
+        localRoot: project.localPath,
+        relPath: "",
+      });
       await get().navigate("local", project.localPath);
       return;
     }
@@ -142,12 +176,12 @@ export const useStore = create<AppState>((set, get) => ({
       environments,
       activeConnectionId: env.connectionId,
       activeEnvironmentId: env.id,
-      remoteRoot: env.remotePath,
+      mapped: true,
+      localRoot: project.localPath,
+      remoteRoot: env.remotePath || "/",
+      relPath: "",
     });
-    await Promise.all([
-      get().navigate("local", project.localPath),
-      get().navigate("remote", env.remotePath || "."),
-    ]);
+    await get().refreshBoth();
   },
 
   switchEnvironment: async (envId) => {
@@ -156,9 +190,10 @@ export const useStore = create<AppState>((set, get) => ({
     set({
       activeEnvironmentId: env.id,
       activeConnectionId: env.connectionId,
-      remoteRoot: env.remotePath,
+      remoteRoot: env.remotePath || "/",
+      relPath: "",
     });
-    await get().navigate("remote", env.remotePath || ".");
+    await get().refreshBoth();
   },
 
   openConnectionOnly: async (connection, localStart) => {
@@ -166,7 +201,10 @@ export const useStore = create<AppState>((set, get) => ({
       activeProject: null,
       activeConnectionId: connection.id,
       activeEnvironmentId: null,
+      mapped: false,
+      localRoot: "",
       remoteRoot: connection.remotePath,
+      relPath: "",
     });
     const home = localStart ?? (await api.homeDir({}));
     await Promise.all([
@@ -175,8 +213,39 @@ export const useStore = create<AppState>((set, get) => ({
     ]);
   },
 
+  enter: async (pane, entry) => {
+    if (entry.type !== "dir") return;
+    const st = get();
+    if (st.mapped) {
+      set({ relPath: appendRel(st.relPath, entry.name) });
+      await st.refreshBoth();
+    } else {
+      await st.navigate(pane, entry.path);
+    }
+  },
+
+  goUp: async (pane) => {
+    const st = get();
+    if (st.mapped) {
+      if (st.relPath === "") return; // locked to root
+      set({ relPath: parentRel(st.relPath) });
+      await st.refreshBoth();
+    } else {
+      await st.navigate(pane, parentOf(st[pane].path));
+    }
+  },
+
+  canGoUp: (pane) => {
+    const st = get();
+    if (st.mapped) return st.relPath !== "";
+    const p = st[pane].path;
+    return p !== "/" && p !== "";
+  },
+
   navigate: async (pane, path) => {
-    set((s) => ({ [pane]: { ...s[pane], loading: true, error: null } }) as Partial<AppState>);
+    // set the path immediately so the breadcrumb and counterpart-path logic are
+    // correct even if the listing fails (e.g. remote dir not created yet)
+    set((s) => ({ [pane]: { ...s[pane], path, loading: true, error: null, selected: new Set() } }) as Partial<AppState>);
     try {
       const entries =
         pane === "local"
@@ -187,24 +256,20 @@ export const useStore = create<AppState>((set, get) => ({
         if (a.type !== "dir" && b.type === "dir") return 1;
         return a.name.localeCompare(b.name);
       });
-      set(
-        (s) =>
-          ({
-            [pane]: { path, entries, loading: false, error: null, selected: new Set() },
-          }) as Partial<AppState>,
-      );
+      set((s) => ({ [pane]: { ...s[pane], path, entries, loading: false, error: null } }) as Partial<AppState>);
     } catch (err) {
-      set(
-        (s) =>
-          ({
-            [pane]: {
-              ...s[pane],
-              loading: false,
-              error: (err as Error).message,
-            },
-          }) as Partial<AppState>,
-      );
+      set((s) => ({ [pane]: { ...s[pane], entries: [], loading: false, error: (err as Error).message } }) as Partial<AppState>);
     }
+  },
+
+  refreshBoth: async () => {
+    const { localRoot, remoteRoot, relPath, activeConnectionId } = get();
+    await Promise.all([
+      get().navigate("local", joinPath(localRoot, relPath)),
+      activeConnectionId !== null
+        ? get().navigate("remote", joinPath(remoteRoot, relPath))
+        : Promise.resolve(),
+    ]);
   },
 
   refreshPane: async (pane) => {

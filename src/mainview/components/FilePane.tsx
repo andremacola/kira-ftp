@@ -13,6 +13,7 @@ import {
   KeyRound,
   FileEdit,
   FileDiff,
+  FolderSync,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -45,6 +46,10 @@ export function FilePane({ pane }: { pane: Pane }) {
   const setSelected = useStore((s) => s.setSelected);
   const activeConnectionId = useStore((s) => s.activeConnectionId);
   const other = useStore((s) => (pane === "local" ? s.remote : s.local));
+  const enter = useStore((s) => s.enter);
+  const goUp = useStore((s) => s.goUp);
+  const canGoUp = useStore((s) => s.canGoUp);
+  const activeProject = useStore((s) => s.activeProject);
   const ui = useUi();
   const [filter, setFilter] = useState("");
 
@@ -58,7 +63,7 @@ export function FilePane({ pane }: { pane: Pane }) {
   }, [state.entries, filter]);
 
   const open = (entry: FileEntry) => {
-    if (entry.type === "dir") void navigate(pane, entry.path);
+    if (entry.type === "dir") void enter(pane, entry);
     else if (isRemote && activeConnectionId !== null)
       ui.openEditor({ connectionId: activeConnectionId, remotePath: entry.path, name: entry.name });
   };
@@ -152,6 +157,35 @@ export function FilePane({ pane }: { pane: Pane }) {
     }
   };
 
+  // Sync a folder against its mapped counterpart (right-click on a directory).
+  const syncFolder = async (entry: FileEntry) => {
+    if (entry.type !== "dir" || !canRemote || activeConnectionId === null || !activeProject)
+      return;
+    const direction = isRemote ? "down" : "up";
+    const localDir = isRemote ? joinLocal(other.path, entry.name) : entry.path;
+    const remoteDir = isRemote ? entry.path : joinRemote(other.path, entry.name);
+    const plan = await api.previewSync({
+      connectionId: activeConnectionId,
+      projectId: activeProject.id,
+      localDir,
+      remoteDir,
+      direction,
+    });
+    ui.showSyncPreview({
+      plan,
+      direction,
+      onRun: async () => {
+        await api.runSync({
+          connectionId: activeConnectionId,
+          projectId: activeProject.id,
+          localDir,
+          remoteDir,
+          direction,
+        });
+      },
+    });
+  };
+
   const transfer = (entry: FileEntry) => {
     if (!canRemote) return;
     if (isRemote) {
@@ -174,7 +208,12 @@ export function FilePane({ pane }: { pane: Pane }) {
         <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {isRemote ? "Remote" : "Local"}
         </span>
-        <Button variant="ghost" size="icon-sm" onClick={() => navigate(pane, parentOf(state.path))}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => void goUp(pane)}
+          disabled={!canGoUp(pane)}
+        >
           <ArrowUp />
         </Button>
         <Button variant="ghost" size="icon-sm" onClick={() => refreshPane(pane)}>
@@ -242,6 +281,11 @@ export function FilePane({ pane }: { pane: Pane }) {
                 {isRemote ? <Download /> : <Upload />}
                 {isRemote ? "Download" : "Upload"}
               </ContextMenuItem>
+              {entry.type === "dir" && canRemote && activeProject && (
+                <ContextMenuItem onSelect={() => void syncFolder(entry)}>
+                  <FolderSync /> {isRemote ? "Sync folder ← remote" : "Sync folder → remote"}
+                </ContextMenuItem>
+              )}
               {isRemote && entry.type === "file" && (
                 <ContextMenuItem onSelect={() => open(entry)}>
                   <FileEdit /> Edit

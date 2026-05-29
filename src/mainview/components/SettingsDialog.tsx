@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, FolderSearch } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +40,7 @@ export function SettingsDialog() {
   const [project, setProject] = useState<Project | null>(null);
   const [rules, setRules] = useState<IgnoreRule[]>([]);
   const [newPattern, setNewPattern] = useState("");
+  const [nameDraft, setNameDraft] = useState("");
   const [envs, setEnvs] = useState<Environment[]>([]);
   const [newEnvName, setNewEnvName] = useState("");
   const [newEnvConn, setNewEnvConn] = useState<number | null>(null);
@@ -51,6 +52,7 @@ export function SettingsDialog() {
   useEffect(() => {
     if (open && activeProject) {
       setProject(activeProject);
+      setNameDraft(activeProject.name);
       void api.listIgnoreRules({ projectId: activeProject.id }).then(setRules);
       void reloadEnvs(activeProject.id);
       setNewEnvConn(connections[0]?.id ?? null);
@@ -103,6 +105,17 @@ export function SettingsDialog() {
     await refreshProjects();
   };
 
+  const changeFolder = async () => {
+    if (!project) return;
+    const picked = await api.pickDirectory({});
+    if (!picked) return;
+    const { id, createdAt, updatedAt, ...input } = { ...project, localPath: picked };
+    const updated = await api.updateProject({ id, input });
+    setProject(updated);
+    await refreshProjects();
+    await openProject(updated); // remap panes to the new local root
+  };
+
   const addRule = async () => {
     if (!project || !newPattern.trim()) return;
     const rule = await api.createIgnoreRule({ projectId: project.id, pattern: newPattern.trim() });
@@ -126,13 +139,37 @@ export function SettingsDialog() {
         </DialogHeader>
 
         {project && (
-          <Tabs defaultValue="behavior">
+          <Tabs defaultValue="general">
             <TabsList>
+              <TabsTrigger value="general">General</TabsTrigger>
               <TabsTrigger value="behavior">Behavior</TabsTrigger>
               <TabsTrigger value="permissions">Permissions</TabsTrigger>
               <TabsTrigger value="environments">Environments</TabsTrigger>
               <TabsTrigger value="ignore">Ignore rules</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="general" className="mt-3 grid gap-3">
+              <div className="grid gap-1.5">
+                <Label>Project name</Label>
+                <Input
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onBlur={() => {
+                    const n = nameDraft.trim();
+                    if (n && n !== project.name) void save({ ...project, name: n });
+                  }}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Local folder (mapped to the remote root)</Label>
+                <div className="flex gap-1.5">
+                  <Input readOnly value={project.localPath} />
+                  <Button variant="outline" size="icon" onClick={() => void changeFolder()}>
+                    <FolderSearch />
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
 
             <TabsContent value="behavior" className="mt-3 grid gap-3">
               {TOGGLES.map((t) => (

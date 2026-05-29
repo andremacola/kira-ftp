@@ -68,6 +68,14 @@ export function Sidebar() {
               <ContextMenuItem onSelect={() => openProject(p)}>
                 <Plug /> Open
               </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={async () => {
+                  await openProject(p);
+                  ui.openSettings();
+                }}
+              >
+                <Pencil /> Settings
+              </ContextMenuItem>
               <ContextMenuItem variant="destructive" onSelect={() => deleteProject(p.id)}>
                 <Trash2 /> Delete
               </ContextMenuItem>
