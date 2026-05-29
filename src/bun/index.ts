@@ -3,7 +3,7 @@
  * typed RPC, bridges core events to webview messages, and opens the window.
  * All ssh2/ftp/rclone work happens here; the React view is pure UI.
  */
-import { BrowserWindow, BrowserView } from "electrobun/bun";
+import { BrowserWindow, BrowserView, ApplicationMenu } from "electrobun/bun";
 import { homedir } from "node:os";
 import { join, basename, dirname } from "node:path";
 import { readFileSync, statSync } from "node:fs";
@@ -314,5 +314,42 @@ process.on("exit", () => {
   ctx.watcher.stopAll();
   ctx.rclone.killSync();
 });
+
+// A native menu is required for the standard edit shortcuts (⌘C/⌘V/⌘A/…) to
+// reach the webview on macOS.
+ApplicationMenu.setApplicationMenu([
+  {
+    label: "Kira FTP",
+    submenu: [
+      { role: "about" },
+      { type: "divider" },
+      { role: "hide", accelerator: "CommandOrControl+H" },
+      { role: "hideOthers" },
+      { role: "showAll" },
+      { type: "divider" },
+      { role: "quit", accelerator: "CommandOrControl+Q" },
+    ],
+  },
+  {
+    label: "Edit",
+    submenu: [
+      { role: "undo", accelerator: "CommandOrControl+Z" },
+      { role: "redo", accelerator: "CommandOrControl+Shift+Z" },
+      { type: "divider" },
+      { role: "cut", accelerator: "CommandOrControl+X" },
+      { role: "copy", accelerator: "CommandOrControl+C" },
+      { role: "paste", accelerator: "CommandOrControl+V" },
+      { role: "selectAll", accelerator: "CommandOrControl+A" },
+    ],
+  },
+  {
+    label: "Window",
+    submenu: [
+      { role: "minimize", accelerator: "CommandOrControl+M" },
+      { role: "zoom" },
+      { role: "close", accelerator: "CommandOrControl+W" },
+    ],
+  },
+]);
 
 console.log("Kira FTP main process started");

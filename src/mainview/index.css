@@ -107,6 +107,16 @@ body {
   overflow: hidden;
 }
 
+/* The body disables text selection for a native feel; re-enable it inside the
+   code editor / diff so users can select and copy. */
+.cm-editor,
+.cm-editor .cm-scroller,
+.cm-editor .cm-content,
+.cm-editor .cm-line {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 /* Diff view: @codemirror/merge intentionally sets the editors to
    height:auto !important + overflowY:visible !important (they never scroll
    internally), so the dialog body (the host div, overflow-auto) is what
