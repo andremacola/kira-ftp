@@ -47,7 +47,7 @@ export function TopBar() {
   };
 
   return (
-    <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border bg-sidebar px-3">
+    <header className="electrobun-webkit-app-region-drag flex h-11 shrink-0 items-center gap-2 border-b border-border bg-sidebar pl-20 pr-3">
       <div className="flex items-center gap-2 font-semibold tracking-tight">
         <img src={logo} alt="" className="size-5 rounded-[5px]" />
         Kira FTP
@@ -64,7 +64,7 @@ export function TopBar() {
         </div>
       )}
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className="electrobun-webkit-app-region-no-drag ml-auto flex items-center gap-1">
         {activeProject && activeConnectionId && (
           <>
             <ToolbarButton tip="Upload changed files (VCS)" onClick={uploadChanged}>

@@ -284,6 +284,9 @@ const win = new BrowserWindow({
   title: "Kira FTP",
   url,
   frame: { width: 1280, height: 820, x: 120, y: 80 },
+  // Unified title bar (VSCode-style): hide the native bar, inset the traffic
+  // lights over our top bar. The TopBar marks itself draggable via CSS.
+  titleBarStyle: "hiddenInset",
   rpc,
 });
 
