@@ -21,11 +21,9 @@ export function DiffDialog() {
     const d = useUi.getState().diff;
     if (!d) return;
     try {
-      const fill = EditorView.theme({
-        "&": { height: "100%" },
-        ".cm-scroller": { overflow: "auto" },
-      });
-      const ext = [EditorView.editable.of(false), githubDark, fill, ...languageFor(d.filename)];
+      // Editors grow to content height; the dialog body (host) provides the
+      // single scrollbar, which also keeps both sides scrolling together.
+      const ext = [EditorView.editable.of(false), githubDark, ...languageFor(d.filename)];
       viewRef.current = new MergeView({
         a: { doc: d.leftText, extensions: ext },
         b: { doc: d.rightText, extensions: ext },
