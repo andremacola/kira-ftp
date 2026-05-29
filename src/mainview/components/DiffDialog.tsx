@@ -1,43 +1,59 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { MergeView } from "@codemirror/merge";
 import { EditorView } from "@codemirror/view";
 import { githubDark } from "@uiw/codemirror-theme-github";
-import { Dialog, DialogContent } from "./ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 import { useUi } from "../ui-store";
 import { languageFor } from "../lib/codemirror";
 
 export function DiffDialog() {
   const diff = useUi((s) => s.diff);
   const close = useUi((s) => s.closeDiff);
-  const host = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<MergeView | null>(null);
 
-  useEffect(() => {
-    if (!diff || !host.current) return;
-    const lang = languageFor(diff.filename);
-    // Force the editors to fill the dialog; a raw MergeView otherwise collapses
-    // to content height (and to 0 when both sides are empty).
-    const fill = EditorView.theme({
-      "&": { height: "100%" },
-      ".cm-scroller": { overflow: "auto" },
-    });
-    const readOnly = [EditorView.editable.of(false), githubDark, fill, ...lang];
-    const view = new MergeView({
-      a: { doc: diff.leftText, extensions: readOnly },
-      b: { doc: diff.rightText, extensions: readOnly },
-      parent: host.current,
-      gutter: true,
-    });
-    return () => view.destroy();
-  }, [diff]);
+  // Callback ref: build the MergeView the moment the host node mounts (avoids
+  // useEffect/ref timing races with the Radix portal + lazy mount). React calls
+  // this with `null` on unmount, which is where we tear the view down.
+  const mountHost = useCallback((node: HTMLDivElement | null) => {
+    viewRef.current?.destroy();
+    viewRef.current = null;
+    if (!node) return;
+    const d = useUi.getState().diff;
+    if (!d) return;
+    try {
+      const fill = EditorView.theme({
+        "&": { height: "100%" },
+        ".cm-scroller": { overflow: "auto" },
+      });
+      const ext = [EditorView.editable.of(false), githubDark, fill, ...languageFor(d.filename)];
+      viewRef.current = new MergeView({
+        a: { doc: d.leftText, extensions: ext },
+        b: { doc: d.rightText, extensions: ext },
+        parent: node,
+        gutter: true,
+      });
+    } catch (err) {
+      console.error("Failed to build diff view:", err);
+      node.textContent = `Failed to render diff: ${(err as Error).message}`;
+    }
+  }, []);
 
   return (
     <Dialog open={!!diff} onOpenChange={(o) => !o && close()}>
       <DialogContent className="flex h-[80vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
+        <DialogTitle className="sr-only">Diff</DialogTitle>
         <div className="flex items-center border-b border-border px-4 py-2 text-[12px]">
-          <span className="flex-1 font-mono text-emerald-500">{diff?.leftLabel}</span>
-          <span className="flex-1 text-right font-mono text-sky-500">{diff?.rightLabel}</span>
+          <span className="flex-1 truncate font-mono text-emerald-500">{diff?.leftLabel}</span>
+          <span className="flex-1 truncate text-right font-mono text-sky-500">
+            {diff?.rightLabel}
+          </span>
         </div>
-        <div ref={host} className="min-h-0 flex-1 overflow-auto text-[13px]" />
+        {/* key forces a fresh host node per diff so the callback ref re-runs */}
+        <div
+          key={diff ? `${diff.leftLabel}|${diff.rightLabel}` : "none"}
+          ref={mountHost}
+          className="min-h-0 flex-1 overflow-auto text-[13px]"
+        />
       </DialogContent>
     </Dialog>
   );
