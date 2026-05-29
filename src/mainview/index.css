@@ -107,6 +107,15 @@ body {
   overflow: hidden;
 }
 
+/* CodeMirror MergeView (diff) must fill its dialog container. */
+.cm-mergeView,
+.cm-mergeViewEditors {
+  height: 100%;
+}
+.cm-mergeView .cm-editor {
+  height: 100%;
+}
+
 /* Thin, unobtrusive scrollbars to match a native macOS feel. */
 ::-webkit-scrollbar {
   width: 10px;

@@ -14,7 +14,13 @@ export function DiffDialog() {
   useEffect(() => {
     if (!diff || !host.current) return;
     const lang = languageFor(diff.filename);
-    const readOnly = [EditorView.editable.of(false), githubDark, ...lang];
+    // Force the editors to fill the dialog; a raw MergeView otherwise collapses
+    // to content height (and to 0 when both sides are empty).
+    const fill = EditorView.theme({
+      "&": { height: "100%" },
+      ".cm-scroller": { overflow: "auto" },
+    });
+    const readOnly = [EditorView.editable.of(false), githubDark, fill, ...lang];
     const view = new MergeView({
       a: { doc: diff.leftText, extensions: readOnly },
       b: { doc: diff.rightText, extensions: readOnly },
