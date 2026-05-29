@@ -170,21 +170,22 @@ export function GlobalSettingsDialog() {
             </p>
             <div className="grid gap-1.5">
               {editors.map((ed) => (
-                <div key={ed.id} className="flex items-center gap-2">
-                  <span className="flex w-40 items-center gap-1.5 text-[13px]">
+                <div key={ed.id} className="flex min-w-0 items-center gap-2">
+                  <span className="flex w-32 shrink-0 items-center gap-1.5 text-[13px]">
                     {ed.name}
                     {!ed.detected && (
                       <span className="text-[10px] text-muted-foreground">(not found)</span>
                     )}
                   </span>
                   {ed.installed ? (
-                    <span className="flex items-center gap-1 text-xs text-emerald-500">
+                    <span className="flex shrink-0 items-center gap-1 text-xs text-emerald-500">
                       <Check className="size-3.5" /> Installed
                     </span>
                   ) : (
                     <Button
                       variant="outline"
                       size="sm"
+                      className="shrink-0"
                       disabled={!ed.detected}
                       onClick={() => void installEditor(ed.id)}
                     >
@@ -192,7 +193,10 @@ export function GlobalSettingsDialog() {
                     </Button>
                   )}
                   {editorMsg[ed.id] && (
-                    <span className="flex-1 truncate text-[11px] text-muted-foreground">
+                    <span
+                      className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground"
+                      title={editorMsg[ed.id]}
+                    >
                       {editorMsg[ed.id]}
                     </span>
                   )}
