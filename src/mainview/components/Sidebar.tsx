@@ -75,7 +75,7 @@ export function Sidebar() {
               <ContextMenuItem
                 onSelect={async () => {
                   await openProject(p);
-                  ui.openSettings();
+                  ui.openProjectSettings();
                 }}
               >
                 <Pencil /> Settings

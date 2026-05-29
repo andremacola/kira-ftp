@@ -119,8 +119,13 @@ export function CommandPalette() {
               <Item onSelect={run(() => store.refreshPane("remote"))} icon={<RefreshCw />}>
                 Refresh remote pane
               </Item>
-              <Item onSelect={run(() => ui.openSettings())} icon={<Settings />}>
-                Open settings
+              {store.activeProject && (
+                <Item onSelect={run(() => ui.openProjectSettings())} icon={<Settings />}>
+                  Project settings
+                </Item>
+              )}
+              <Item onSelect={run(() => ui.openGlobalSettings())} icon={<Settings />}>
+                Settings
               </Item>
             </Group>
 

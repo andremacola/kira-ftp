@@ -13,7 +13,7 @@ export function TopBar() {
   const localRoot = useStore((s) => s.localRoot);
   const remoteRoot = useStore((s) => s.remoteRoot);
   const toggleCommandPalette = useUi((s) => s.toggleCommandPalette);
-  const openSettings = useUi((s) => s.openSettings);
+  const openGlobalSettings = useUi((s) => s.openGlobalSettings);
   const [watching, setWatching] = useState(false);
 
   useEffect(() => {
@@ -82,7 +82,7 @@ export function TopBar() {
         <ToolbarButton tip="Command palette (⌘K)" onClick={() => toggleCommandPalette(true)}>
           <Command />
         </ToolbarButton>
-        <ToolbarButton tip="Settings" onClick={openSettings}>
+        <ToolbarButton tip="Settings" onClick={openGlobalSettings}>
           <Settings />
         </ToolbarButton>
       </div>

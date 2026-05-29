@@ -10,6 +10,7 @@ import { ConfirmDialog } from "./components/ConfirmDialog";
 import { SyncPreviewDialog } from "./components/SyncPreviewDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { GlobalSettingsDialog } from "./components/GlobalSettingsDialog";
 import { useUi } from "./ui-store";
 
 // CodeMirror is heavy; load the editor/diff only when first opened.
@@ -57,6 +58,7 @@ export default function App() {
         {diffOpen && <DiffDialog />}
       </Suspense>
       <SettingsDialog />
+      <GlobalSettingsDialog />
     </TooltipProvider>
   );
 }

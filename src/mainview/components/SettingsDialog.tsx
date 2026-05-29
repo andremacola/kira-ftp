@@ -29,8 +29,8 @@ const TOGGLES: Array<{ key: keyof Project; label: string; hint: string }> = [
 ];
 
 export function SettingsDialog() {
-  const open = useUi((s) => s.settingsOpen);
-  const close = useUi((s) => s.closeSettings);
+  const open = useUi((s) => s.projectSettingsOpen);
+  const close = useUi((s) => s.closeProjectSettings);
   const activeProject = useStore((s) => s.activeProject);
   const refreshProjects = useStore((s) => s.refreshProjects);
   const openProject = useStore((s) => s.openProject);
@@ -43,12 +43,6 @@ export function SettingsDialog() {
   const [envId, setEnvId] = useState<number | null>(null);
   const [conn, setConn] = useState<ConnFields>(emptyConnection());
   const [savingConn, setSavingConn] = useState(false);
-  const [dockVisible, setDockVisible] = useState(true);
-
-  useEffect(() => {
-    if (!open) return;
-    void api.getDockVisible({}).then(setDockVisible);
-  }, [open]);
 
   useEffect(() => {
     if (!open || !activeProject) return;
@@ -159,24 +153,6 @@ export function SettingsDialog() {
                   <Button variant="outline" size="icon" onClick={() => void changeFolder()}>
                     <FolderSearch />
                   </Button>
-                </div>
-              </div>
-
-              <div className="mt-1 border-t border-border pt-3">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="text-[13px]">Show icon in the Dock</div>
-                    <div className="text-[11px] text-muted-foreground">
-                      Turn off to run from the menu bar only (app-wide).
-                    </div>
-                  </div>
-                  <Switch
-                    checked={dockVisible}
-                    onCheckedChange={(v) => {
-                      setDockVisible(v);
-                      void api.setDockVisible({ visible: v });
-                    }}
-                  />
                 </div>
               </div>
             </TabsContent>

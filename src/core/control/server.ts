@@ -60,11 +60,20 @@ export class ControlServer {
 
   start(): void {
     if (this.server) return;
-    this.server = Bun.serve({
-      port: CONTROL_PORT,
-      hostname: "127.0.0.1",
-      fetch: (req) => this.handle(req),
-    });
+    try {
+      this.server = Bun.serve({
+        port: CONTROL_PORT,
+        hostname: "127.0.0.1",
+        fetch: (req) => this.handle(req),
+      });
+    } catch (err) {
+      // Port busy usually means another Kira FTP instance owns it. Don't crash
+      // the app — the CLI will talk to whichever instance holds the port.
+      this.server = null;
+      console.warn(
+        `Control server not started (port ${CONTROL_PORT} unavailable): ${(err as Error).message}`,
+      );
+    }
   }
 
   stop(): void {

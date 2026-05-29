@@ -45,7 +45,8 @@ interface UiState {
   connectionDialog: { open: boolean; editing: Connection | null };
   projectDialog: boolean;
   commandPalette: boolean;
-  settingsOpen: boolean;
+  projectSettingsOpen: boolean;
+  globalSettingsOpen: boolean;
   prompt: PromptConfig | null;
   confirm: ConfirmConfig | null;
   syncPreview: SyncPreviewConfig | null;
@@ -57,8 +58,10 @@ interface UiState {
   openProjectDialog: () => void;
   closeProjectDialog: () => void;
   toggleCommandPalette: (open?: boolean) => void;
-  openSettings: () => void;
-  closeSettings: () => void;
+  openProjectSettings: () => void;
+  closeProjectSettings: () => void;
+  openGlobalSettings: () => void;
+  closeGlobalSettings: () => void;
   showPrompt: (cfg: PromptConfig) => void;
   closePrompt: () => void;
   showConfirm: (cfg: ConfirmConfig) => void;
@@ -75,7 +78,8 @@ export const useUi = create<UiState>((set) => ({
   connectionDialog: { open: false, editing: null },
   projectDialog: false,
   commandPalette: false,
-  settingsOpen: false,
+  projectSettingsOpen: false,
+  globalSettingsOpen: false,
   prompt: null,
   confirm: null,
   syncPreview: null,
@@ -89,8 +93,10 @@ export const useUi = create<UiState>((set) => ({
   closeProjectDialog: () => set({ projectDialog: false }),
   toggleCommandPalette: (open) =>
     set((s) => ({ commandPalette: open ?? !s.commandPalette })),
-  openSettings: () => set({ settingsOpen: true }),
-  closeSettings: () => set({ settingsOpen: false }),
+  openProjectSettings: () => set({ projectSettingsOpen: true }),
+  closeProjectSettings: () => set({ projectSettingsOpen: false }),
+  openGlobalSettings: () => set({ globalSettingsOpen: true }),
+  closeGlobalSettings: () => set({ globalSettingsOpen: false }),
   showPrompt: (cfg) => set({ prompt: cfg }),
   closePrompt: () => set({ prompt: null }),
   showConfirm: (cfg) => set({ confirm: cfg }),
