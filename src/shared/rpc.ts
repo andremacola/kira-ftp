@@ -196,9 +196,14 @@ export type KiraRPC = {
       importSublimeConfig: { params: { localPath: string }; response: Project };
       recentHistory: { params: Record<string, never>; response: TransferHistoryEntry[] };
 
+      /* custom window controls (titleBarStyle hidden) */
+      windowClose: { params: Record<string, never>; response: void };
+      windowMinimize: { params: Record<string, never>; response: void };
+      windowZoom: { params: Record<string, never>; response: void };
+
       /* global app preferences */
-      getDockVisible: { params: Record<string, never>; response: boolean };
-      setDockVisible: { params: { visible: boolean }; response: void };
+      getShowInMenuBar: { params: Record<string, never>; response: boolean };
+      setShowInMenuBar: { params: { on: boolean }; response: void };
       getNotifySound: { params: Record<string, never>; response: boolean };
       setNotifySound: { params: { on: boolean }; response: void };
       getControlPort: { params: Record<string, never>; response: number };

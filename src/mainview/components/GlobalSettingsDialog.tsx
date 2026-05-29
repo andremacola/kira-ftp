@@ -23,7 +23,7 @@ export function GlobalSettingsDialog() {
   const focusLog = useUi((s) => s.focusLog);
   const closeGlobal = useUi((s) => s.closeGlobalSettings);
 
-  const [dockVisible, setDockVisible] = useState(true);
+  const [menuBar, setMenuBar] = useState(true);
   const [notifySound, setNotifySound] = useState(true);
   const [port, setPort] = useState("8911");
   const [portError, setPortError] = useState<string | null>(null);
@@ -61,7 +61,7 @@ export function GlobalSettingsDialog() {
 
   useEffect(() => {
     if (!open) return;
-    void api.getDockVisible({}).then(setDockVisible);
+    void api.getShowInMenuBar({}).then(setMenuBar);
     void api.getNotifySound({}).then(setNotifySound);
     void api.getControlPort({}).then((p) => setPort(String(p)));
     void refreshStatus();
@@ -142,12 +142,15 @@ export function GlobalSettingsDialog() {
         </DialogHeader>
 
         <div className="grid grid-cols-1 gap-4">
-          <Row title="Show icon in the Dock" hint="Turn off to run from the menu bar only.">
+          <Row
+            title="Show in menu bar"
+            hint="On: closing the window keeps Kira FTP in the menu bar. Off: closing the window quits the app."
+          >
             <Switch
-              checked={dockVisible}
+              checked={menuBar}
               onCheckedChange={(v) => {
-                setDockVisible(v);
-                void api.setDockVisible({ visible: v });
+                setMenuBar(v);
+                void api.setShowInMenuBar({ on: v });
               }}
             />
           </Row>

@@ -10,7 +10,6 @@ import { Tray, Utils } from "electrobun/bun";
 import type { AppContext } from "../core/app-context";
 import type { TransferJob } from "../shared/domain";
 
-const DOCK_VISIBLE_KEY = "dockVisible";
 const NOTIFY_SOUND_KEY = "notifySound";
 
 const IDLE_ICON = "views://mainview/menubar/idle.png";
@@ -35,9 +34,8 @@ export class MenubarManager {
     private onQuit: () => void,
   ) {}
 
-  /** Create the tray and apply the persisted dock-visibility preference. */
+  /** Create the tray. Dock visibility is driven by window visibility (see index). */
   init(): void {
-    this.applyDockPreference();
     try {
       // Icons are 36px @144dpi = 18pt intrinsic. setTrayImage carries no size,
       // so the intrinsic point-size must match this; keep createTray at 18 too.
@@ -96,29 +94,12 @@ export class MenubarManager {
     ];
   }
 
-  /** Whether the dock icon should be shown (persisted, default true). */
-  isDockVisible(): boolean {
-    return this.ctx.settings.getBool(DOCK_VISIBLE_KEY, true);
-  }
-  setDockVisible(visible: boolean): void {
-    this.ctx.settings.setBool(DOCK_VISIBLE_KEY, visible);
-    this.applyDockPreference();
-  }
-
   /** Whether completion notifications play a sound (persisted, default true). */
   isNotifySound(): boolean {
     return this.ctx.settings.getBool(NOTIFY_SOUND_KEY, true);
   }
   setNotifySound(on: boolean): void {
     this.ctx.settings.setBool(NOTIFY_SOUND_KEY, on);
-  }
-
-  private applyDockPreference(): void {
-    try {
-      Utils.setDockIconVisible(this.isDockVisible());
-    } catch {
-      /* not supported -> ignore */
-    }
   }
 
   /* ----------------------------- activity ------------------------------- */

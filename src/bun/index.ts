@@ -230,8 +230,18 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
         return ctx.projects.get(project.id)!;
       },
       recentHistory: () => ctx.history.recent(),
-      getDockVisible: () => menubar.isDockVisible(),
-      setDockVisible: ({ visible }) => menubar.setDockVisible(visible),
+      windowClose: () => {
+        hideWindow();
+      },
+      windowMinimize: () => {
+        win?.minimize();
+      },
+      windowZoom: () => {
+        if (win?.isMaximized()) win.unmaximize();
+        else win?.maximize();
+      },
+      getShowInMenuBar: () => showInMenuBar(),
+      setShowInMenuBar: ({ on }) => ctx.settings.setBool("showInMenuBar", on),
       getNotifySound: () => menubar.isNotifySound(),
       setNotifySound: ({ on }) => menubar.setNotifySound(on),
       getControlPort: () => control.port(),
@@ -372,18 +382,23 @@ function initialFrame(): Frame {
 }
 
 /**
- * The window can be closed (destroying it) without quitting the app
- * (exitOnLastWindowClosed: false). We track it + its bus subscriptions so
- * "Open Kira FTP" recreates it, persist its frame to restore on reopen, and
- * mirror OrbStack's dock behavior: the Dock icon is shown only while a window
- * exists (the menu-bar tray is always present).
+ * The window is created once and kept alive; the custom (red) close button
+ * HIDES it rather than destroying it, so its state is preserved across
+ * open/close. "Show in menu bar" (default on) decides what hiding means:
+ *   on  -> app drops to the menu bar (Dock icon hidden, Accessory mode)
+ *   off -> a normal Dock app; hiding the window quits the app
+ * The Dock icon follows window visibility (OrbStack-style): while the window is
+ * visible the app is Regular (so minimize goes to the app icon), and when
+ * hidden it goes Accessory (if menu-bar mode) — keeping the tray always present.
  */
-let win: BrowserWindow<typeof rpc> | null = null;
-let unbind: Array<() => void> = [];
+let win: BrowserWindow | null = null;
 
-function setDockForWindow(visible: boolean): void {
-  // Only auto-toggle the dock when the user hasn't forced it off in settings.
-  if (!menubar.isDockVisible()) return;
+/** True = live in the menu bar; false = behave as a normal Dock-only app. */
+function showInMenuBar(): boolean {
+  return ctx.settings.getBool("showInMenuBar", true);
+}
+
+function setDock(visible: boolean): void {
   try {
     Utils.setDockIconVisible(visible);
   } catch {
@@ -391,71 +406,70 @@ function setDockForWindow(visible: boolean): void {
   }
 }
 
-function openMainWindow(): void {
-  if (win) {
-    win.show();
-    win.activate();
-    return;
-  }
+function createMainWindow(): void {
   win = new BrowserWindow({
     title: "Kira FTP",
     url,
     frame: initialFrame(),
-    // Unified title bar (VSCode-style): hide the native bar, inset the traffic
-    // lights over our top bar. Drag via CSS.
-    titleBarStyle: "hiddenInset",
-    trafficLightOffset: { x: 8, y: 8 },
+    // Frameless: we render our own traffic-light controls in the top bar so the
+    // close button can hide (preserve state) instead of destroy.
+    titleBarStyle: "hidden",
     rpc,
   });
-  setDockForWindow(true);
+  setDock(true); // window visible -> Regular (Dock icon, native minimize)
 
-  // Bridge core events -> this window's webview.
-  const channel = win.webview.rpc;
+  const channel = win.webview.rpc as typeof rpc | undefined;
   if (channel) {
-    unbind = [
-      ctx.bus.on("transfer:update", (job) => channel.send.transferUpdate(job)),
-      ctx.bus.on("transfer:done", (job) => channel.send.transferDone(job)),
-      ctx.bus.on("transfer:error", (e) => channel.send.transferError(e)),
-      ctx.bus.on("connection:state", (s) => channel.send.connectionState(s)),
-      ctx.bus.on("watch:event", (e) => channel.send.watchEvent(e)),
-      ctx.bus.on("log", (l) => channel.send.log(l)),
-    ];
+    ctx.bus.on("transfer:update", (job) => channel.send.transferUpdate(job));
+    ctx.bus.on("transfer:done", (job) => channel.send.transferDone(job));
+    ctx.bus.on("transfer:error", (e) => channel.send.transferError(e));
+    ctx.bus.on("connection:state", (s) => channel.send.connectionState(s));
+    ctx.bus.on("watch:event", (e) => channel.send.watchEvent(e));
+    ctx.bus.on("log", (l) => channel.send.log(l));
   }
 
-  // Persist the frame as the user moves/resizes so we can restore it next open.
-  const remember = (e: unknown) => {
-    const d = e as { data?: Partial<Frame> } | undefined;
-    const f = win?.getFrame?.() ?? (d?.data as Frame | undefined);
+  // Persist the frame as the user moves/resizes so we restore it next time.
+  const remember = () => {
+    const f = win?.getFrame?.();
     if (f) ctx.settings.set("windowFrame", JSON.stringify(f));
   };
   win.on("move", remember);
   win.on("resize", remember);
+}
 
-  // Closing the window destroys it but keeps the app alive in the menu bar.
-  win.on("close", () => {
-    if (win) {
-      const f = win.getFrame?.();
-      if (f) ctx.settings.set("windowFrame", JSON.stringify(f));
-    }
-    for (const off of unbind) off();
-    unbind = [];
-    win = null;
-    setDockForWindow(false); // OrbStack-style: no window -> hide the Dock icon
-  });
+/** Show (and focus) the window, recreating it only if it was never created. */
+function showWindow(): void {
+  if (!win) {
+    createMainWindow();
+  } else {
+    win.show();
+  }
+  win?.activate();
+  setDock(true);
+}
+
+/** Hide the window (custom close). Quits if not running in the menu bar. */
+function hideWindow(): void {
+  const f = win?.getFrame?.();
+  if (f) ctx.settings.set("windowFrame", JSON.stringify(f));
+  if (!showInMenuBar()) {
+    void gracefulShutdown().finally(() => process.exit(0));
+    return;
+  }
+  win?.hide();
+  setDock(false); // no visible window -> Accessory (menu-bar only)
 }
 
 // Menubar presence: tray icon that pulses during transfers, notifies on
-// completion, and honors the show-in-dock preference. Created before the window
-// because openMainWindow() consults it for the dock-visibility preference.
+// completion, and toggles remote editing.
 const menubar = new MenubarManager(
   ctx,
-  () => openMainWindow(), // "Open Kira FTP" — recreate the window if it was closed
+  () => showWindow(), // "Open Kira FTP" — show (and restore) the window
   // Quit from the tray: close pooled connections / rclone gracefully first.
   () => void gracefulShutdown().finally(() => process.exit(0)),
 );
 menubar.init();
-
-openMainWindow();
+showWindow();
 
 // Graceful shutdown: signals can await async cleanup; the bare exit handler
 // can only run sync work, so it just kills the rclone daemon to avoid orphans.

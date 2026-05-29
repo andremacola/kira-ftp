@@ -46,7 +46,14 @@ export function TopBar() {
   };
 
   return (
-    <header className="electrobun-webkit-app-region-drag relative flex h-11 shrink-0 items-center gap-2 border-b border-border bg-sidebar pl-20 pr-3">
+    <header className="electrobun-webkit-app-region-drag relative flex h-11 shrink-0 items-center gap-2 border-b border-border bg-sidebar pl-3 pr-3">
+      {/* custom traffic lights (window is frameless). Close HIDES to the menu bar. */}
+      <div className="electrobun-webkit-app-region-no-drag group flex items-center gap-2">
+        <TrafficLight color="bg-[#ff5f57]" glyph="✕" title="Close" onClick={() => void api.windowClose({})} />
+        <TrafficLight color="bg-[#febc2e]" glyph="–" title="Minimize" onClick={() => void api.windowMinimize({})} />
+        <TrafficLight color="bg-[#28c840]" glyph="+" title="Zoom" onClick={() => void api.windowZoom({})} />
+      </div>
+
       {/* centered, de-emphasized app title */}
       <div className="pointer-events-none absolute inset-x-0 text-center text-[13px] font-medium tracking-tight text-muted-foreground">
         Kira FTP
@@ -114,5 +121,28 @@ function ToolbarButton({
       </TooltipTrigger>
       <TooltipContent>{tip}</TooltipContent>
     </Tooltip>
+  );
+}
+
+/** A macOS-style traffic-light button; reveals its glyph on header hover. */
+function TrafficLight({
+  color,
+  glyph,
+  title,
+  onClick,
+}: {
+  color: string;
+  glyph: string;
+  title: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`flex size-3 items-center justify-center rounded-full ${color} text-[8px] font-bold leading-none text-black/55 opacity-90 hover:opacity-100`}
+    >
+      <span className="opacity-0 group-hover:opacity-100">{glyph}</span>
+    </button>
   );
 }
