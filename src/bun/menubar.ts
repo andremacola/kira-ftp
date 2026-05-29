@@ -2,16 +2,21 @@
  * Menubar (tray) presence + activity animation + completion notifications, and
  * the show-in-dock toggle. Lives in the Electrobun layer because it drives the
  * native Tray/Utils APIs; it observes the core EventBus for transfer activity.
+ *
+ * The activity indicator animates the *image* of a single tray icon (swapping
+ * spinner frames) — never the title — so the menu bar item never grows/jumps.
  */
 import { Tray, Utils } from "electrobun/bun";
 import type { AppContext } from "../core/app-context";
 import type { TransferJob } from "../shared/domain";
 
 const DOCK_VISIBLE_KEY = "dockVisible";
-const ICON = "views://mainview/menubar-idle.png";
-/** Title-based pulse frames shown while transfers run (template image stays). */
-const PULSE = ["􀈋", "↑", "↕", "↓"]; // simple ascii spinner-ish; cycles
-const PULSE_MS = 220;
+const NOTIFY_SOUND_KEY = "notifySound";
+
+const IDLE_ICON = "views://mainview/menubar/idle.png";
+const SPIN_FRAMES = 8;
+const spinIcon = (f: number) => `views://mainview/menubar/spin-${f}.png`;
+const FRAME_MS = 110;
 
 export class MenubarManager {
   private tray: Tray | null = null;
@@ -31,7 +36,8 @@ export class MenubarManager {
   init(): void {
     this.applyDockPreference();
     try {
-      this.tray = new Tray({ title: "", image: ICON, template: true });
+      // 22pt logical; the 22px PNGs are template images (black + alpha).
+      this.tray = new Tray({ image: IDLE_ICON, template: true, width: 22, height: 22 });
       this.tray.setMenu(this.menu());
       this.tray.on("tray-clicked", () => this.onOpen());
     } catch {
@@ -54,10 +60,17 @@ export class MenubarManager {
   isDockVisible(): boolean {
     return this.ctx.settings.getBool(DOCK_VISIBLE_KEY, true);
   }
-
   setDockVisible(visible: boolean): void {
     this.ctx.settings.setBool(DOCK_VISIBLE_KEY, visible);
     this.applyDockPreference();
+  }
+
+  /** Whether completion notifications play a sound (persisted, default true). */
+  isNotifySound(): boolean {
+    return this.ctx.settings.getBool(NOTIFY_SOUND_KEY, true);
+  }
+  setNotifySound(on: boolean): void {
+    this.ctx.settings.setBool(NOTIFY_SOUND_KEY, on);
   }
 
   private applyDockPreference(): void {
@@ -82,17 +95,14 @@ export class MenubarManager {
   private complete(job: TransferJob): void {
     this.active.delete(job.id);
     this.refreshAnimation();
+    const silent = !this.isNotifySound();
     if (job.status === "done") {
-      Utils.showNotification({
-        title: "Kira FTP",
-        body: `${labelFor(job)} finished`,
-        silent: false,
-      });
+      Utils.showNotification({ title: "Kira FTP", body: `${labelFor(job)} finished`, silent });
     } else if (job.status === "error") {
       Utils.showNotification({
         title: "Kira FTP — transfer failed",
         body: job.error ?? labelFor(job),
-        silent: false,
+        silent,
       });
     }
   }
@@ -100,20 +110,19 @@ export class MenubarManager {
   private refreshAnimation(): void {
     const busy = this.active.size > 0;
     if (busy && !this.timer) {
-      this.timer = setInterval(() => this.tick(), PULSE_MS);
+      this.frame = 0;
+      this.timer = setInterval(() => this.tick(), FRAME_MS);
     } else if (!busy && this.timer) {
       clearInterval(this.timer);
       this.timer = null;
-      this.frame = 0;
-      this.tray?.setTitle("");
+      this.tray?.setImage(IDLE_ICON); // back to the resting glyph
     }
   }
 
   private tick(): void {
     if (!this.tray) return;
-    this.frame = (this.frame + 1) % PULSE.length;
-    const n = this.active.size;
-    this.tray.setTitle(` ${PULSE[this.frame]}${n > 1 ? ` ${n}` : ""}`);
+    this.frame = (this.frame + 1) % SPIN_FRAMES;
+    this.tray.setImage(spinIcon(this.frame));
   }
 
   dispose(): void {

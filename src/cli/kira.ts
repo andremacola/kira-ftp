@@ -13,9 +13,9 @@
  *   kira sync     <path>     (bidirectional)
  */
 import { resolve } from "node:path";
-import { CONTROL_PORT, readControlToken, type ControlAction } from "../core/control/server";
+import { readControlPort, readControlToken, type ControlAction } from "../core/control/server";
 
-const BASE = `http://127.0.0.1:${CONTROL_PORT}`;
+const BASE = `http://127.0.0.1:${readControlPort()}`;
 
 const ALIASES: Record<string, ControlAction> = {
   upload: "upload",

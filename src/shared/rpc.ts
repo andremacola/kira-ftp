@@ -196,9 +196,16 @@ export type KiraRPC = {
       importSublimeConfig: { params: { localPath: string }; response: Project };
       recentHistory: { params: Record<string, never>; response: TransferHistoryEntry[] };
 
-      /* menubar / dock */
+      /* global app preferences */
       getDockVisible: { params: Record<string, never>; response: boolean };
       setDockVisible: { params: { visible: boolean }; response: void };
+      getNotifySound: { params: Record<string, never>; response: boolean };
+      setNotifySound: { params: { on: boolean }; response: void };
+      getControlPort: { params: Record<string, never>; response: number };
+      setControlPort: {
+        params: { port: number };
+        response: { ok: boolean; error?: string };
+      };
       pickDirectory: { params: Record<string, never>; response: string | null };
       pickFile: { params: Record<string, never>; response: string | null };
       pickSftpConfig: { params: Record<string, never>; response: string | null };

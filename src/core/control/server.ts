@@ -12,11 +12,35 @@ import { PathResolver, type ResolvedTarget } from "../services/path-resolver";
 import { rulesToRcloneFilters } from "../util/ignore";
 import { joinRemote } from "../connections/transport";
 
-export const CONTROL_PORT = 8911;
+export const DEFAULT_CONTROL_PORT = 8911;
 
 /** Resolved lazily so it honors KIRA_DATA_DIR set after module load. */
 function tokenFile(): string {
   return join(appDataDir(), "control-token");
+}
+function portFile(): string {
+  return join(appDataDir(), "control-port");
+}
+
+/** Persist the active control port so the CLI can find it without the DB. */
+export function writeControlPort(port: number): void {
+  try {
+    mkdirSync(appDataDir(), { recursive: true });
+    writeFileSync(portFile(), String(port));
+  } catch {
+    /* best effort */
+  }
+}
+
+/** Read the control port the running app published, or the default. */
+export function readControlPort(): number {
+  try {
+    const n = parseInt(readFileSync(portFile(), "utf-8").trim(), 10);
+    if (Number.isInteger(n) && n > 0 && n < 65536) return n;
+  } catch {
+    /* fall through */
+  }
+  return DEFAULT_CONTROL_PORT;
 }
 
 /** Read the control token, creating one if needed. */
@@ -58,20 +82,36 @@ export class ControlServer {
     });
   }
 
+  /** Active control port (from settings, else default). */
+  port(): number {
+    const v = this.ctx.settings.get("controlPort");
+    const n = v ? parseInt(v, 10) : NaN;
+    return Number.isInteger(n) && n > 0 && n < 65536 ? n : DEFAULT_CONTROL_PORT;
+  }
+
+  /** Change the port and restart the server (persists for the CLI). */
+  setPort(port: number): void {
+    this.ctx.settings.set("controlPort", String(port));
+    this.stop();
+    this.start();
+  }
+
   start(): void {
     if (this.server) return;
+    const port = this.port();
     try {
       this.server = Bun.serve({
-        port: CONTROL_PORT,
+        port,
         hostname: "127.0.0.1",
         fetch: (req) => this.handle(req),
       });
+      writeControlPort(port);
     } catch (err) {
       // Port busy usually means another Kira FTP instance owns it. Don't crash
       // the app — the CLI will talk to whichever instance holds the port.
       this.server = null;
       console.warn(
-        `Control server not started (port ${CONTROL_PORT} unavailable): ${(err as Error).message}`,
+        `Control server not started (port ${port} unavailable): ${(err as Error).message}`,
       );
     }
   }

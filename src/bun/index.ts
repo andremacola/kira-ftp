@@ -228,6 +228,20 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
       recentHistory: () => ctx.history.recent(),
       getDockVisible: () => menubar.isDockVisible(),
       setDockVisible: ({ visible }) => menubar.setDockVisible(visible),
+      getNotifySound: () => menubar.isNotifySound(),
+      setNotifySound: ({ on }) => menubar.setNotifySound(on),
+      getControlPort: () => control.port(),
+      setControlPort: ({ port }) => {
+        if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+          return { ok: false, error: "Port must be between 1024 and 65535" };
+        }
+        try {
+          control.setPort(port);
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: (e as Error).message };
+        }
+      },
       pickDirectory: () => pickPath({ directory: true }),
       pickFile: () => pickPath({ file: true }),
       // import accepts the .json file OR the folder that contains it
