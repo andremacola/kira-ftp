@@ -285,8 +285,10 @@ const win = new BrowserWindow({
   url,
   frame: { width: 1280, height: 820, x: 120, y: 80 },
   // Unified title bar (VSCode-style): hide the native bar, inset the traffic
-  // lights over our top bar. The TopBar marks itself draggable via CSS.
+  // lights over our top bar. Nudge the lights down to the bar's vertical center
+  // (the 44px bar is taller than the default light position). Drag via CSS.
   titleBarStyle: "hiddenInset",
+  trafficLightOffset: { x: 8, y: 8 },
   rpc,
 });
 

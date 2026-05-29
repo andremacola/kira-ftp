@@ -46,8 +46,11 @@ export function TopBar() {
   };
 
   return (
-    <header className="electrobun-webkit-app-region-drag flex h-11 shrink-0 items-center gap-2 border-b border-border bg-sidebar pl-20 pr-3">
-      <div className="font-semibold tracking-tight">Kira FTP</div>
+    <header className="electrobun-webkit-app-region-drag relative flex h-11 shrink-0 items-center gap-2 border-b border-border bg-sidebar pl-20 pr-3">
+      {/* centered, de-emphasized app title */}
+      <div className="pointer-events-none absolute inset-x-0 text-center text-[13px] font-medium tracking-tight text-muted-foreground">
+        Kira FTP
+      </div>
 
       {activeProject && (
         <div className="ml-2 flex items-center gap-2 text-xs text-muted-foreground">
