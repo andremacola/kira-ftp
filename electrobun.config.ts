@@ -9,6 +9,9 @@ export default {
     identifier: "com.kira.ftp",
     version: "0.2.0",
   },
+  // Closing the window keeps the app alive in the menu bar; the tray's
+  // "Quit Kira FTP" is the way to fully exit.
+  runtime: { exitOnLastWindowClosed: false },
   build: {
     copy: {
       "dist/index.html": "views/mainview/index.html",

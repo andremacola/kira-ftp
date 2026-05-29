@@ -3,7 +3,7 @@
  * typed RPC, bridges core events to webview messages, and opens the window.
  * All ssh2/ftp/rclone work happens here; the React view is pure UI.
  */
-import { BrowserWindow, BrowserView, ApplicationMenu } from "electrobun/bun";
+import { BrowserWindow, BrowserView, ApplicationMenu, Screen, Utils } from "electrobun/bun";
 import { homedir } from "node:os";
 import { join, basename, dirname } from "node:path";
 import { readFileSync, statSync } from "node:fs";
@@ -331,41 +331,131 @@ async function getMainViewUrl(): Promise<string> {
 
 const url = await getMainViewUrl();
 
-const win = new BrowserWindow({
-  title: "Kira FTP",
-  url,
-  frame: { width: 1280, height: 820, x: 120, y: 80 },
-  // Unified title bar (VSCode-style): hide the native bar, inset the traffic
-  // lights over our top bar. Nudge the lights down to the bar's vertical center
-  // (the 44px bar is taller than the default light position). Drag via CSS.
-  titleBarStyle: "hiddenInset",
-  trafficLightOffset: { x: 8, y: 8 },
-  rpc,
-});
+const WIN_W = 1280;
+const WIN_H = 820;
+type Frame = { x: number; y: number; width: number; height: number };
 
-// Menubar presence: tray icon that pulses during transfers, notifies on
-// completion, and honors the show-in-dock preference.
-const menubar = new MenubarManager(
-  ctx,
-  () => {
+/** Centered frame on the primary display's work area (excludes dock/menubar). */
+function centeredFrame(): Frame {
+  try {
+    const primary = Screen.getPrimaryDisplay() as {
+      workArea?: Frame;
+      bounds?: Frame;
+    };
+    const area = primary.workArea ?? primary.bounds;
+    if (area) {
+      return {
+        width: WIN_W,
+        height: WIN_H,
+        x: Math.round((area.width - WIN_W) / 2) + area.x,
+        y: Math.round((area.height - WIN_H) / 2) + area.y,
+      };
+    }
+  } catch {
+    /* Screen unavailable -> fall back */
+  }
+  return { width: WIN_W, height: WIN_H, x: 120, y: 80 };
+}
+
+/** Restore the last saved window frame, else center on screen. */
+function initialFrame(): Frame {
+  const saved = ctx.settings.get("windowFrame");
+  if (saved) {
+    try {
+      const f = JSON.parse(saved) as Frame;
+      if ([f.x, f.y, f.width, f.height].every((n) => typeof n === "number")) return f;
+    } catch {
+      /* fall through to centered */
+    }
+  }
+  return centeredFrame();
+}
+
+/**
+ * The window can be closed (destroying it) without quitting the app
+ * (exitOnLastWindowClosed: false). We track it + its bus subscriptions so
+ * "Open Kira FTP" recreates it, persist its frame to restore on reopen, and
+ * mirror OrbStack's dock behavior: the Dock icon is shown only while a window
+ * exists (the menu-bar tray is always present).
+ */
+let win: BrowserWindow<typeof rpc> | null = null;
+let unbind: Array<() => void> = [];
+
+function setDockForWindow(visible: boolean): void {
+  // Only auto-toggle the dock when the user hasn't forced it off in settings.
+  if (!menubar.isDockVisible()) return;
+  try {
+    Utils.setDockIconVisible(visible);
+  } catch {
+    /* not supported */
+  }
+}
+
+function openMainWindow(): void {
+  if (win) {
     win.show();
     win.activate();
-  },
+    return;
+  }
+  win = new BrowserWindow({
+    title: "Kira FTP",
+    url,
+    frame: initialFrame(),
+    // Unified title bar (VSCode-style): hide the native bar, inset the traffic
+    // lights over our top bar. Drag via CSS.
+    titleBarStyle: "hiddenInset",
+    trafficLightOffset: { x: 8, y: 8 },
+    rpc,
+  });
+  setDockForWindow(true);
+
+  // Bridge core events -> this window's webview.
+  const channel = win.webview.rpc;
+  if (channel) {
+    unbind = [
+      ctx.bus.on("transfer:update", (job) => channel.send.transferUpdate(job)),
+      ctx.bus.on("transfer:done", (job) => channel.send.transferDone(job)),
+      ctx.bus.on("transfer:error", (e) => channel.send.transferError(e)),
+      ctx.bus.on("connection:state", (s) => channel.send.connectionState(s)),
+      ctx.bus.on("watch:event", (e) => channel.send.watchEvent(e)),
+      ctx.bus.on("log", (l) => channel.send.log(l)),
+    ];
+  }
+
+  // Persist the frame as the user moves/resizes so we can restore it next open.
+  const remember = (e: unknown) => {
+    const d = e as { data?: Partial<Frame> } | undefined;
+    const f = win?.getFrame?.() ?? (d?.data as Frame | undefined);
+    if (f) ctx.settings.set("windowFrame", JSON.stringify(f));
+  };
+  win.on("move", remember);
+  win.on("resize", remember);
+
+  // Closing the window destroys it but keeps the app alive in the menu bar.
+  win.on("close", () => {
+    if (win) {
+      const f = win.getFrame?.();
+      if (f) ctx.settings.set("windowFrame", JSON.stringify(f));
+    }
+    for (const off of unbind) off();
+    unbind = [];
+    win = null;
+    setDockForWindow(false); // OrbStack-style: no window -> hide the Dock icon
+  });
+}
+
+// Menubar presence: tray icon that pulses during transfers, notifies on
+// completion, and honors the show-in-dock preference. Created before the window
+// because openMainWindow() consults it for the dock-visibility preference.
+const menubar = new MenubarManager(
+  ctx,
+  () => openMainWindow(), // "Open Kira FTP" — recreate the window if it was closed
   // Quit from the tray: close pooled connections / rclone gracefully first.
   () => void gracefulShutdown().finally(() => process.exit(0)),
 );
 menubar.init();
 
-/* Bridge core events -> webview messages. */
-const channel = win.webview.rpc;
-if (channel) {
-  ctx.bus.on("transfer:update", (job) => channel.send.transferUpdate(job));
-  ctx.bus.on("transfer:done", (job) => channel.send.transferDone(job));
-  ctx.bus.on("transfer:error", (e) => channel.send.transferError(e));
-  ctx.bus.on("connection:state", (s) => channel.send.connectionState(s));
-  ctx.bus.on("watch:event", (e) => channel.send.watchEvent(e));
-  ctx.bus.on("log", (l) => channel.send.log(l));
-}
+openMainWindow();
 
 // Graceful shutdown: signals can await async cleanup; the bare exit handler
 // can only run sync work, so it just kills the rclone daemon to avoid orphans.
