@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   RefreshCw,
@@ -52,6 +52,12 @@ export function FilePane({ pane }: { pane: Pane }) {
   const activeProject = useStore((s) => s.activeProject);
   const ui = useUi();
   const [filter, setFilter] = useState("");
+  /** path of the folder row currently hovered during a drag (drop highlight). */
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  /** true while a drag from the other pane hovers the pane background. */
+  const [paneDropActive, setPaneDropActive] = useState(false);
+
+  const DRAG_MIME = "application/x-kira-paths";
 
   const isRemote = pane === "remote";
   const canRemote = activeConnectionId !== null;
@@ -62,10 +68,41 @@ export function FilePane({ pane }: { pane: Pane }) {
     return state.entries.filter((e) => e.name.toLowerCase().includes(f));
   }, [state.entries, filter]);
 
+  const lastClicked = useRef<string | null>(null);
+
   const open = (entry: FileEntry) => {
     if (entry.type === "dir") void enter(pane, entry);
     else if (isRemote && activeConnectionId !== null)
       ui.openEditor({ connectionId: activeConnectionId, remotePath: entry.path, name: entry.name });
+  };
+
+  /** Click selection with ⌘ (toggle), ⇧ (range), or plain (single). */
+  const onRowClick = (entry: FileEntry, e: React.MouseEvent) => {
+    const next = new Set(state.selected);
+    if (e.metaKey || e.ctrlKey) {
+      next.has(entry.path) ? next.delete(entry.path) : next.add(entry.path);
+      lastClicked.current = entry.path;
+    } else if (e.shiftKey && lastClicked.current) {
+      const from = entries.findIndex((x) => x.path === lastClicked.current);
+      const to = entries.findIndex((x) => x.path === entry.path);
+      if (from !== -1 && to !== -1) {
+        const [lo, hi] = from < to ? [from, to] : [to, from];
+        for (let i = lo; i <= hi; i++) next.add(entries[i]!.path);
+      }
+    } else {
+      next.clear();
+      next.add(entry.path);
+      lastClicked.current = entry.path;
+    }
+    setSelected(pane, next);
+  };
+
+  /** Entries the user is acting on: the full selection, or just `entry`. */
+  const actionTargets = (entry: FileEntry): FileEntry[] => {
+    if (state.selected.has(entry.path) && state.selected.size > 1) {
+      return entries.filter((x) => state.selected.has(x.path));
+    }
+    return [entry];
   };
 
   const newFolder = () =>
@@ -95,19 +132,25 @@ export function FilePane({ pane }: { pane: Pane }) {
       },
     });
 
-  const remove = (entry: FileEntry) =>
+  const remove = (entry: FileEntry) => {
+    const targets = actionTargets(entry);
+    const label = targets.length > 1 ? `${targets.length} items` : entry.name;
     ui.showConfirm({
-      title: `Delete ${entry.name}`,
+      title: `Delete ${label}`,
       message: isRemote
-        ? "Delete this item on the remote server?"
-        : "Delete this item from your local disk?",
+        ? `Delete ${label} on the remote server?`
+        : `Delete ${label} from your local disk?`,
       destructive: true,
       onConfirm: async () => {
-        if (isRemote) await api.deleteRemote({ connectionId: activeConnectionId!, path: entry.path });
-        else await api.deleteLocal({ path: entry.path });
+        for (const t of targets) {
+          if (isRemote) await api.deleteRemote({ connectionId: activeConnectionId!, path: t.path });
+          else await api.deleteLocal({ path: t.path });
+        }
+        setSelected(pane, new Set());
         await refreshPane(pane);
       },
     });
+  };
 
   const chmod = (entry: FileEntry) =>
     ui.showPrompt({
@@ -186,18 +229,50 @@ export function FilePane({ pane }: { pane: Pane }) {
     });
   };
 
+  /** Transfer one entry to the given destination dir on the other side. */
+  const transferOne = (entry: FileEntry, destDir: string) => {
+    if (activeConnectionId === null) return;
+    if (isRemote) {
+      const localTarget = joinLocal(destDir, entry.name);
+      if (entry.type === "dir")
+        void api.downloadFolder({ connectionId: activeConnectionId, remoteDir: entry.path, localDir: localTarget });
+      else void api.downloadFile({ connectionId: activeConnectionId, remotePath: entry.path, localPath: localTarget });
+    } else {
+      const remoteTarget = joinRemote(destDir, entry.name);
+      if (entry.type === "dir")
+        void api.uploadFolder({ connectionId: activeConnectionId, localDir: entry.path, remoteDir: remoteTarget });
+      else void api.uploadFile({ connectionId: activeConnectionId, localPath: entry.path, remotePath: remoteTarget });
+    }
+  };
+
+  /** Context-menu transfer: all selected (or just this) into the other pane's dir. */
   const transfer = (entry: FileEntry) => {
     if (!canRemote) return;
-    if (isRemote) {
-      const localTarget = joinLocal(other.path, entry.name);
-      if (entry.type === "dir")
-        void api.downloadFolder({ connectionId: activeConnectionId!, remoteDir: entry.path, localDir: localTarget });
-      else void api.downloadFile({ connectionId: activeConnectionId!, remotePath: entry.path, localPath: localTarget });
-    } else {
-      const remoteTarget = joinRemote(other.path, entry.name);
-      if (entry.type === "dir")
-        void api.uploadFolder({ connectionId: activeConnectionId!, localDir: entry.path, remoteDir: remoteTarget });
-      else void api.uploadFile({ connectionId: activeConnectionId!, localPath: entry.path, remotePath: remoteTarget });
+    for (const t of actionTargets(entry)) transferOne(t, other.path);
+  };
+
+  /** Drop targets from the OTHER pane onto this pane (or a folder in it). */
+  const onDropEntries = (paths: string[], destDir: string) => {
+    if (!canRemote) return;
+    // dropping FROM the other pane: those entries live on the opposite side, so
+    // the *other* pane drives the transfer direction. We mirror transferOne from
+    // the other pane's perspective by pushing into destDir on THIS side.
+    const sourceEntries = other.entries.filter((e) => paths.includes(e.path));
+    for (const e of sourceEntries) {
+      if (activeConnectionId === null) continue;
+      if (isRemote) {
+        // other = local -> upload into this remote destDir
+        const remoteTarget = joinRemote(destDir, e.name);
+        if (e.type === "dir")
+          void api.uploadFolder({ connectionId: activeConnectionId, localDir: e.path, remoteDir: remoteTarget });
+        else void api.uploadFile({ connectionId: activeConnectionId, localPath: e.path, remotePath: remoteTarget });
+      } else {
+        // other = remote -> download into this local destDir
+        const localTarget = joinLocal(destDir, e.name);
+        if (e.type === "dir")
+          void api.downloadFolder({ connectionId: activeConnectionId, remoteDir: e.path, localDir: localTarget });
+        else void api.downloadFile({ connectionId: activeConnectionId, remotePath: e.path, localPath: localTarget });
+      }
     }
   };
 
@@ -207,6 +282,9 @@ export function FilePane({ pane }: { pane: Pane }) {
       <div className="flex items-center gap-1 border-b border-border bg-card/40 px-2 py-1.5">
         <span className="px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {isRemote ? "Remote" : "Local"}
+          {state.selected.size > 1 && (
+            <span className="ml-1 normal-case text-primary">· {state.selected.size} selected</span>
+          )}
         </span>
         <Button
           variant="ghost"
@@ -240,8 +318,29 @@ export function FilePane({ pane }: { pane: Pane }) {
         {state.path || (isRemote ? "(not connected)" : "")}
       </div>
 
-      {/* list */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* list (drop zone: dropping here transfers into the current dir) */}
+      <div
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto",
+          paneDropActive && "bg-primary/5 ring-1 ring-inset ring-primary/40",
+        )}
+        onDragOver={(e) => {
+          if (canRemote && e.dataTransfer.types.includes(DRAG_MIME)) {
+            e.preventDefault();
+            setPaneDropActive(true);
+          }
+        }}
+        onDragLeave={(e) => {
+          if (e.currentTarget === e.target) setPaneDropActive(false);
+        }}
+        onDrop={(e) => {
+          setPaneDropActive(false);
+          const raw = e.dataTransfer.getData(DRAG_MIME);
+          if (!raw) return;
+          e.preventDefault();
+          onDropEntries(JSON.parse(raw) as string[], state.path);
+        }}
+      >
         {isRemote && !canRemote && (
           <div className="p-6 text-center text-xs text-muted-foreground">
             Open a project or server to browse remote files.
@@ -256,11 +355,40 @@ export function FilePane({ pane }: { pane: Pane }) {
           <ContextMenu key={entry.path}>
             <ContextMenuTrigger asChild>
               <div
+                draggable
+                onDragStart={(e) => {
+                  // drag the selection if this row is part of it, else just this row
+                  const paths = state.selected.has(entry.path)
+                    ? [...state.selected]
+                    : [entry.path];
+                  e.dataTransfer.setData(DRAG_MIME, JSON.stringify(paths));
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
+                onDragOver={(e) => {
+                  // a folder row is a drop target for items from the other pane
+                  if (entry.type === "dir" && canRemote && e.dataTransfer.types.includes(DRAG_MIME)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDropTarget(entry.path);
+                  }
+                }}
+                onDragLeave={() => setDropTarget((p) => (p === entry.path ? null : p))}
+                onDrop={(e) => {
+                  if (entry.type !== "dir") return;
+                  const raw = e.dataTransfer.getData(DRAG_MIME);
+                  if (!raw) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDropTarget(null);
+                  setPaneDropActive(false);
+                  onDropEntries(JSON.parse(raw) as string[], entry.path);
+                }}
                 onDoubleClick={() => open(entry)}
-                onClick={() => setSelected(pane, new Set([entry.path]))}
+                onClick={(e) => onRowClick(entry, e)}
                 className={cn(
                   "group flex cursor-default select-none items-center gap-2 px-3 py-1 text-[13px]",
                   state.selected.has(entry.path) ? "bg-accent" : "hover:bg-accent/50",
+                  dropTarget === entry.path && "ring-1 ring-inset ring-primary/60 bg-primary/10",
                 )}
               >
                 <EntryIcon entry={entry} />
@@ -279,7 +407,11 @@ export function FilePane({ pane }: { pane: Pane }) {
             <ContextMenuContent>
               <ContextMenuItem onSelect={() => transfer(entry)} disabled={!canRemote}>
                 {isRemote ? <Download /> : <Upload />}
-                {isRemote ? "Download" : "Upload"}
+                {(() => {
+                  const n = actionTargets(entry).length;
+                  const verb = isRemote ? "Download" : "Upload";
+                  return n > 1 ? `${verb} ${n} items` : verb;
+                })()}
               </ContextMenuItem>
               {entry.type === "dir" && canRemote && activeProject && (
                 <ContextMenuItem onSelect={() => void syncFolder(entry)}>
