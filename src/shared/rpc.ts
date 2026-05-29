@@ -206,6 +206,14 @@ export type KiraRPC = {
         params: { port: number };
         response: { ok: boolean; error?: string };
       };
+      getControlStatus: {
+        params: Record<string, never>;
+        response: {
+          state: "active" | "stopped" | "failed";
+          port: number;
+          error: string | null;
+        };
+      };
       pickDirectory: { params: Record<string, never>; response: string | null };
       pickFile: { params: Record<string, never>; response: string | null };
       pickSftpConfig: { params: Record<string, never>; response: string | null };

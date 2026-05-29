@@ -68,10 +68,20 @@ interface ControlRequest {
   path: string;
 }
 
+export type ControlState = "active" | "stopped" | "failed";
+
+export interface ControlStatus {
+  state: ControlState;
+  port: number;
+  error: string | null;
+}
+
 export class ControlServer {
   private server: ReturnType<typeof Bun.serve> | null = null;
   private token: string;
   private resolver: PathResolver;
+  private state: ControlState = "stopped";
+  private lastError: string | null = null;
 
   constructor(private ctx: AppContext) {
     this.token = ensureControlToken();
@@ -80,6 +90,16 @@ export class ControlServer {
       listEnvironments: (id) => ctx.environments.listForProject(id),
       getConnection: (id) => ctx.connections.get(id),
     });
+  }
+
+  /** Current control-server status for the global settings UI. */
+  status(): ControlStatus {
+    return { state: this.state, port: this.port(), error: this.lastError };
+  }
+
+  /** Emit a log line to the shared log panel. */
+  private log(level: "info" | "warn" | "error", message: string): void {
+    this.ctx.bus.emit("log", { level, message, at: new Date().toISOString() });
   }
 
   /** Active control port (from settings, else default). */
@@ -106,19 +126,23 @@ export class ControlServer {
         fetch: (req) => this.handle(req),
       });
       writeControlPort(port);
+      this.state = "active";
+      this.lastError = null;
+      this.log("info", `Control server listening on 127.0.0.1:${port}`);
     } catch (err) {
       // Port busy usually means another Kira FTP instance owns it. Don't crash
       // the app — the CLI will talk to whichever instance holds the port.
       this.server = null;
-      console.warn(
-        `Control server not started (port ${port} unavailable): ${(err as Error).message}`,
-      );
+      this.state = "failed";
+      this.lastError = (err as Error).message;
+      this.log("error", `Control server failed on port ${port}: ${this.lastError}`);
     }
   }
 
   stop(): void {
     this.server?.stop(true);
     this.server = null;
+    this.state = "stopped";
   }
 
   private json(body: unknown, status = 200): Response {
@@ -148,6 +172,7 @@ export class ControlServer {
 
     const target = this.resolver.resolve(body.path);
     if (!target) {
+      this.log("warn", `CLI ${body.action}: no project contains ${body.path}`);
       return this.json(
         { ok: false, error: `No project contains: ${body.path}` },
         404,
@@ -156,8 +181,10 @@ export class ControlServer {
 
     try {
       const result = await this.dispatch(body.action, target);
+      this.log("info", `CLI ${body.action} [${target.project.name}]: ${result.message}`);
       return this.json({ ok: true, project: target.project.name, ...result });
     } catch (err) {
+      this.log("error", `CLI ${body.action} [${target.project.name}] failed: ${(err as Error).message}`);
       return this.json({ ok: false, error: (err as Error).message }, 500);
     }
   }

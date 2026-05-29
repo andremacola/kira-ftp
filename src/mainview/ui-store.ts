@@ -51,8 +51,11 @@ interface UiState {
   syncPreview: SyncPreviewConfig | null;
   editor: EditorConfig | null;
   diff: DiffConfig | null;
+  /** Bumped to ask the transfer dock to open and focus the Log tab. */
+  focusLogSignal: number;
 
   openProjectDialog: () => void;
+  focusLog: () => void;
   closeProjectDialog: () => void;
   toggleCommandPalette: (open?: boolean) => void;
   openProjectSettings: () => void;
@@ -81,9 +84,11 @@ export const useUi = create<UiState>((set) => ({
   syncPreview: null,
   editor: null,
   diff: null,
+  focusLogSignal: 0,
 
   openProjectDialog: () => set({ projectDialog: true }),
   closeProjectDialog: () => set({ projectDialog: false }),
+  focusLog: () => set((s) => ({ focusLogSignal: s.focusLogSignal + 1 })),
   toggleCommandPalette: (open) =>
     set((s) => ({ commandPalette: open ?? !s.commandPalette })),
   openProjectSettings: () => set({ projectSettingsOpen: true }),

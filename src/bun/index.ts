@@ -231,6 +231,7 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
       getNotifySound: () => menubar.isNotifySound(),
       setNotifySound: ({ on }) => menubar.setNotifySound(on),
       getControlPort: () => control.port(),
+      getControlStatus: () => control.status(),
       setControlPort: ({ port }) => {
         if (!Number.isInteger(port) || port < 1024 || port > 65535) {
           return { ok: false, error: "Port must be between 1024 and 65535" };

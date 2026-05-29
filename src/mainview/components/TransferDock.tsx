@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronUp, ChevronDown, X, Trash2, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
 import { Badge } from "./ui/badge";
 import { useStore } from "../store";
+import { useUi } from "../ui-store";
 import { cn, formatBytes, formatSpeed } from "../lib/utils";
 import type { TransferJob, TransferStatus } from "@shared/domain";
 
@@ -12,8 +13,17 @@ export function TransferDock() {
   const logs = useStore((s) => s.logs);
   const cancelTransfer = useStore((s) => s.cancelTransfer);
   const clearFinished = useStore((s) => s.clearFinished);
+  const focusLogSignal = useUi((s) => s.focusLogSignal);
   const [open, setOpen] = useState(true);
   const [tab, setTab] = useState<"transfers" | "log">("transfers");
+
+  // External request (e.g. from global settings) to reveal the Log.
+  useEffect(() => {
+    if (focusLogSignal > 0) {
+      setTab("log");
+      setOpen(true);
+    }
+  }, [focusLogSignal]);
 
   const active = transfers.filter((t) => t.status === "running" || t.status === "queued").length;
 
