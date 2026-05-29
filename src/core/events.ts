@@ -16,6 +16,8 @@ export interface AppEvents {
   "watch:event": { projectId: number; path: string; action: "upload" | "skip" };
   /** True when any interactive remote op (list/stat/mkdir/…) is in flight. */
   "remote:activity": { busy: boolean };
+  /** Request a desktop notification (e.g. a CLI command with no project). */
+  notify: { title: string; body: string };
   log: LogLine;
 }
 

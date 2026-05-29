@@ -7,7 +7,7 @@
  * concurrently. FTP/FTPS cannot share a control connection across simultaneous
  * transfers, so operations on a single FTP connection are serialized.
  */
-import type { Connection } from "../../shared/domain";
+import type { Connection, ConnectionState } from "../../shared/domain";
 import { FtpTransport } from "./ftp";
 import { SftpTransport } from "./sftp";
 import type { Transport } from "./transport";
@@ -26,18 +26,41 @@ export class ConnectionPool {
   /** Count of in-flight withTransport ops, for the activity indicator. */
   private inFlight = 0;
   private onActivity: ((busy: boolean) => void) | null = null;
+  private onState: ((connId: number, state: ConnectionState) => void) | null = null;
+  private onLog: ((message: string) => void) | null = null;
+
+  /** Last activity (ms epoch) per connection, used by the idle sweeper. */
+  private lastActivity = new Map<number, number>();
+  /** Per-connection in-flight op count, so a busy link is never reaped. */
+  private connInFlight = new Map<number, number>();
+  private idleMs = 0;
+  private idleTimer: ReturnType<typeof setInterval> | null = null;
 
   /** Subscribe to remote-activity changes (true when any op is in flight). */
   setActivityListener(fn: (busy: boolean) => void): void {
     this.onActivity = fn;
   }
-
-  private enter(): void {
-    if (this.inFlight++ === 0) this.onActivity?.(true);
+  /** Subscribe to per-connection state transitions (connecting/…/disconnected). */
+  setStateListener(fn: (connId: number, state: ConnectionState) => void): void {
+    this.onState = fn;
   }
-  private leave(): void {
+  /** Subscribe to pool log lines (e.g. idle reaps). */
+  setLogListener(fn: (message: string) => void): void {
+    this.onLog = fn;
+  }
+
+  private enter(connId: number): void {
+    if (this.inFlight++ === 0) this.onActivity?.(true);
+    this.connInFlight.set(connId, (this.connInFlight.get(connId) ?? 0) + 1);
+    this.lastActivity.set(connId, Date.now());
+  }
+  private leave(connId: number): void {
     if (--this.inFlight === 0) this.onActivity?.(false);
     if (this.inFlight < 0) this.inFlight = 0;
+    const n = (this.connInFlight.get(connId) ?? 1) - 1;
+    if (n <= 0) this.connInFlight.delete(connId);
+    else this.connInFlight.set(connId, n);
+    this.lastActivity.set(connId, Date.now());
   }
 
   /** Get a live transport, sharing a single connect across concurrent calls. */
@@ -54,8 +77,15 @@ export class ConnectionPool {
         this.transports.delete(conn.id);
       }
       const transport = createTransport(conn);
-      await transport.connect();
+      this.onState?.(conn.id, "connecting");
+      try {
+        await transport.connect();
+      } catch (err) {
+        this.onState?.(conn.id, "error");
+        throw err;
+      }
       this.transports.set(conn.id, transport);
+      this.onState?.(conn.id, "connected");
       return transport;
     })();
     this.connecting.set(conn.id, connect);
@@ -74,8 +104,8 @@ export class ConnectionPool {
     conn: Connection,
     fn: (t: Transport) => Promise<T>,
   ): Promise<T> {
-    this.enter();
-    const done = () => this.leave();
+    this.enter(conn.id);
+    const done = () => this.leave(conn.id);
     if (conn.type === "sftp") {
       const p = this.getTransport(conn).then(fn);
       p.then(done, done);
@@ -99,23 +129,61 @@ export class ConnectionPool {
     return run;
   }
 
-  /** Force-close a connection (e.g. user edited/removed it). */
+  /** Force-close a connection (manual disconnect, idle reap, edited config). */
   async close(connId: number): Promise<void> {
     this.connecting.delete(connId);
     this.queues.delete(connId);
+    this.lastActivity.delete(connId);
+    this.connInFlight.delete(connId);
     const transport = this.transports.get(connId);
-    if (!transport) return;
     this.transports.delete(connId);
-    await this.safeDisconnect(transport);
+    if (transport) await this.safeDisconnect(transport);
+    // Always announce the disconnect so the UI clears a stale "connected".
+    this.onState?.(connId, "disconnected");
   }
 
   /** Close everything (app shutdown). */
   async closeAll(): Promise<void> {
+    this.stopIdleSweeper();
     const all = [...this.transports.values()];
     this.transports.clear();
     this.connecting.clear();
     this.queues.clear();
+    this.lastActivity.clear();
+    this.connInFlight.clear();
     await Promise.all(all.map((t) => this.safeDisconnect(t)));
+  }
+
+  /** Configure idle auto-disconnect. ms <= 0 disables it. */
+  setIdleTimeout(ms: number): void {
+    this.idleMs = ms > 0 ? ms : 0;
+    this.stopIdleSweeper();
+    if (this.idleMs > 0) {
+      // Check often enough to be responsive, but never busier than every 30s.
+      const cadence = Math.min(this.idleMs, 30_000);
+      this.idleTimer = setInterval(() => this.reapIdle(), cadence);
+    }
+  }
+
+  private stopIdleSweeper(): void {
+    if (this.idleTimer) {
+      clearInterval(this.idleTimer);
+      this.idleTimer = null;
+    }
+  }
+
+  /** Close any live connection idle longer than idleMs and not mid-operation. */
+  private reapIdle(): void {
+    if (this.idleMs <= 0) return;
+    const now = Date.now();
+    for (const connId of [...this.transports.keys()]) {
+      if ((this.connInFlight.get(connId) ?? 0) > 0) continue;
+      const last = this.lastActivity.get(connId) ?? 0;
+      if (now - last > this.idleMs) {
+        this.onLog?.(`Disconnected idle connection after ${Math.round(this.idleMs / 60_000)} min`);
+        void this.close(connId);
+      }
+    }
   }
 
   private async safeDisconnect(t: Transport): Promise<void> {

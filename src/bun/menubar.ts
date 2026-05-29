@@ -38,6 +38,9 @@ export class MenubarManager {
   init(): void {
     this.ctx.bus.on("transfer:update", (job) => this.track(job));
     this.ctx.bus.on("transfer:done", (job) => this.complete(job));
+    this.ctx.bus.on("notify", ({ title, body }) =>
+      Utils.showNotification({ title, body, silent: !this.isNotifySound() }),
+    );
     this.ctx.bus.on("remote:activity", ({ busy }) => {
       if (busy) {
         if (this.remoteOffTimer) {

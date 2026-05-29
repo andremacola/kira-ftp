@@ -16,6 +16,7 @@ import type {
   IgnoreRule,
   LogLine,
   Project,
+  ProjectGroup,
   ProjectInput,
   SessionState,
   SyncPlan,
@@ -40,6 +41,18 @@ export type KiraRPC = {
       testConnection: {
         params: { input: ConnectionFields };
         response: ConnectionTestResult;
+      };
+      /** Drop a live link without deleting the profile (lazy reconnect later). */
+      disconnectConnection: { params: { id: number }; response: void };
+
+      /* project groups */
+      listGroups: { params: Record<string, never>; response: ProjectGroup[] };
+      createGroup: { params: { name: string }; response: ProjectGroup };
+      renameGroup: { params: { id: number; name: string }; response: ProjectGroup };
+      deleteGroup: { params: { id: number }; response: void };
+      setProjectGroup: {
+        params: { projectId: number; groupId: number | null };
+        response: void;
       };
 
       /* projects */
@@ -206,6 +219,11 @@ export type KiraRPC = {
       setShowInMenuBar: { params: { on: boolean }; response: void };
       getNotifySound: { params: Record<string, never>; response: boolean };
       setNotifySound: { params: { on: boolean }; response: void };
+      getRememberSession: { params: Record<string, never>; response: boolean };
+      setRememberSession: { params: { on: boolean }; response: void };
+      /** Idle auto-disconnect in minutes (0 = disabled). */
+      getIdleDisconnect: { params: Record<string, never>; response: number };
+      setIdleDisconnect: { params: { minutes: number }; response: void };
       getControlPort: { params: Record<string, never>; response: number };
       setControlPort: {
         params: { port: number };

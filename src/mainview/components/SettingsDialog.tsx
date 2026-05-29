@@ -12,6 +12,7 @@ import { Switch } from "./ui/switch";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Button } from "./ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { ConnectionFields, emptyConnection } from "./ConnectionFields";
 import { useStore } from "../store";
 import { useUi } from "../ui-store";
@@ -32,6 +33,7 @@ export function SettingsDialog() {
   const open = useUi((s) => s.projectSettingsOpen);
   const close = useUi((s) => s.closeProjectSettings);
   const activeProject = useStore((s) => s.activeProject);
+  const groups = useStore((s) => s.groups);
   const refreshProjects = useStore((s) => s.refreshProjects);
   const openProject = useStore((s) => s.openProject);
 
@@ -154,6 +156,30 @@ export function SettingsDialog() {
                     <FolderSearch />
                   </Button>
                 </div>
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Group</Label>
+                <Select
+                  value={project.groupId == null ? "none" : String(project.groupId)}
+                  onValueChange={(v) =>
+                    void saveProject({
+                      ...project,
+                      groupId: v === "none" ? null : Number(v),
+                    })
+                  }
+                >
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No group</SelectItem>
+                    {groups.map((g) => (
+                      <SelectItem key={g.id} value={String(g.id)}>
+                        {g.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </TabsContent>
 

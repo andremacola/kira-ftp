@@ -49,11 +49,24 @@ export type ConnectionInput = Omit<Connection, "id" | "createdAt" | "updatedAt">
 /** Connection fields without ownership (ownership is decided by the backend). */
 export type ConnectionFields = Omit<ConnectionInput, "ownerProjectId">;
 
+/** A named, ordered grouping for projects in the sidebar. */
+export interface ProjectGroup {
+  id: number;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ProjectGroupInput = Pick<ProjectGroup, "name" | "sortOrder">;
+
 /** A local<->remote mapping (the "project" / sftp-config concept). */
 export interface Project {
   id: number;
   name: string;
   localPath: string;
+  /** Owning sidebar group, or null for an ungrouped project. */
+  groupId: number | null;
   defaultEnvironmentId: number | null;
   uploadOnSave: boolean;
   saveBeforeUpload: boolean;

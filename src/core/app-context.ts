@@ -9,6 +9,7 @@ import { databasePath } from "./paths";
 import {
   ConnectionsRepo,
   ProjectsRepo,
+  ProjectGroupsRepo,
   EnvironmentsRepo,
   IgnoreRulesRepo,
   HistoryRepo,
@@ -38,7 +39,11 @@ import type {
 /** Connection fields for a project environment (ownership is set by us). */
 export type EnvConnectionInput = Omit<ConnectionInput, "ownerProjectId">;
 
-const DEFAULT_PROJECT: Omit<ProjectInput, "name" | "localPath" | "defaultEnvironmentId"> = {
+const DEFAULT_PROJECT: Omit<
+  ProjectInput,
+  "name" | "localPath" | "defaultEnvironmentId"
+> = {
+  groupId: null,
   uploadOnSave: true,
   saveBeforeUpload: true,
   watchEnabled: false,
@@ -70,6 +75,7 @@ export class AppContext {
 
   readonly connections: ConnectionsRepo;
   readonly projects: ProjectsRepo;
+  readonly groups: ProjectGroupsRepo;
   readonly environments: EnvironmentsRepo;
   readonly ignoreRules: IgnoreRulesRepo;
   readonly history: HistoryRepo;
@@ -89,6 +95,7 @@ export class AppContext {
 
     this.connections = new ConnectionsRepo(this.db);
     this.projects = new ProjectsRepo(this.db);
+    this.groups = new ProjectGroupsRepo(this.db);
     this.environments = new EnvironmentsRepo(this.db);
     this.ignoreRules = new IgnoreRulesRepo(this.db);
     this.history = new HistoryRepo(this.db);
@@ -121,6 +128,22 @@ export class AppContext {
     // Surface interactive remote activity (list/stat/mkdir/rename/…) so the
     // menubar shows the spinner during browsing/edits, not only transfers.
     this.pool.setActivityListener((busy) => this.bus.emit("remote:activity", { busy }));
+    // Relay per-connection state to the UI, and log idle reaps.
+    this.pool.setStateListener((connectionId, state) =>
+      this.bus.emit("connection:state", { connectionId, state }),
+    );
+    this.pool.setLogListener((message) =>
+      this.bus.emit("log", { level: "info", message, at: new Date().toISOString() }),
+    );
+    this.pool.setIdleTimeout(this.idleDisconnectMs());
+  }
+
+  /** Idle auto-disconnect timeout in ms (0 = disabled), from settings. */
+  idleDisconnectMs(): number {
+    // Default to 15 min when unset; an explicit "0" means the user chose Never.
+    const raw = this.settings.get("idleDisconnectMinutes");
+    const min = raw === null ? 15 : parseInt(raw, 10);
+    return Number.isFinite(min) && min > 0 ? min * 60_000 : 0;
   }
 
   /** Resolve the active connection + remote path for a project's environment. */

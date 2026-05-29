@@ -42,6 +42,11 @@ export class ConnectionService {
     this.repo.delete(id);
   }
 
+  /** Drop the live link without deleting the profile (lazy reconnect later). */
+  async disconnect(id: number): Promise<void> {
+    await this.pool.close(id);
+  }
+
   /** Connect with the given (possibly unsaved) config and verify access. */
   async test(input: ConnectionFields): Promise<ConnectionTestResult> {
     const conn: Connection = {

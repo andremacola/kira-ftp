@@ -1,10 +1,19 @@
-import { Command, Settings, GitBranch, Eye, EyeOff } from "lucide-react";
+import { Command, Settings, GitBranch, Eye, EyeOff, PlugZap, Plug } from "lucide-react";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useStore } from "../store";
 import { useUi } from "../ui-store";
 import { api } from "../lib/rpc";
+import { cn } from "../lib/utils";
 import { useEffect, useState } from "react";
+import type { ConnectionState } from "@shared/domain";
+
+const STATE_META: Record<ConnectionState, { dot: string; label: string }> = {
+  connected: { dot: "bg-emerald-500", label: "Connected" },
+  connecting: { dot: "bg-amber-500 animate-pulse", label: "Connecting…" },
+  disconnected: { dot: "bg-muted-foreground", label: "Disconnected" },
+  error: { dot: "bg-destructive", label: "Connection error" },
+};
 
 export function TopBar() {
   const activeProject = useStore((s) => s.activeProject);
@@ -12,9 +21,18 @@ export function TopBar() {
   const conn = useStore((s) => s.activeConnection);
   const localRoot = useStore((s) => s.localRoot);
   const remoteRoot = useStore((s) => s.remoteRoot);
+  const connectionStates = useStore((s) => s.connectionStates);
+  const disconnect = useStore((s) => s.disconnect);
+  const refreshBoth = useStore((s) => s.refreshBoth);
   const toggleCommandPalette = useUi((s) => s.toggleCommandPalette);
   const openGlobalSettings = useUi((s) => s.openGlobalSettings);
   const [watching, setWatching] = useState(false);
+
+  const connState: ConnectionState | null =
+    activeConnectionId !== null
+      ? connectionStates[activeConnectionId] ?? "connecting"
+      : null;
+  const connected = connState === "connected" || connState === "connecting";
 
   useEffect(() => {
     if (activeProject) {
@@ -60,12 +78,24 @@ export function TopBar() {
               · {conn.user}@{conn.host}
             </span>
           )}
+          {connState && (
+            <span
+              className={cn("size-2 rounded-full", STATE_META[connState].dot)}
+              title={STATE_META[connState].label}
+            />
+          )}
         </div>
       )}
 
       <div className="electrobun-webkit-app-region-no-drag ml-auto flex items-center gap-1">
-        {activeProject && activeConnectionId && (
+        {activeProject && activeConnectionId !== null && (
           <>
+            <ToolbarButton
+              tip={connected ? "Disconnect" : "Reconnect"}
+              onClick={connected ? () => void disconnect() : () => void refreshBoth()}
+            >
+              {connected ? <PlugZap /> : <Plug />}
+            </ToolbarButton>
             <ToolbarButton tip="Upload changed files (VCS)" onClick={uploadChanged}>
               <GitBranch />
             </ToolbarButton>

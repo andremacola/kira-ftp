@@ -86,6 +86,7 @@ export function parseSublimeConfig(text: string, localPath: string): ImportResul
   const project: Omit<ProjectInput, "defaultEnvironmentId"> = {
     name,
     localPath,
+    groupId: null,
     uploadOnSave: pick(cfg.upload_on_save, true),
     saveBeforeUpload: pick(cfg.save_before_upload, true),
     watchEnabled: false,

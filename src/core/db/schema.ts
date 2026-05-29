@@ -5,7 +5,7 @@
  */
 
 /** Bump when adding a migration. Each index in MIGRATIONS is one version. */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /**
  * Ordered list of migrations. Index 0 -> version 1, etc.
@@ -110,5 +110,22 @@ export const MIGRATIONS: string[] = [
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
   );
+  `,
+
+  // v4: sidebar project groups. Deleting a group nulls its projects' group_id
+  // (foreign_keys is ON), so projects fall back to ungrouped, never deleted.
+  `
+  CREATE TABLE project_groups (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT    NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT    NOT NULL,
+    updated_at TEXT    NOT NULL
+  );
+
+  ALTER TABLE projects ADD COLUMN group_id INTEGER
+    REFERENCES project_groups(id) ON DELETE SET NULL;
+
+  CREATE INDEX idx_project_group ON projects(group_id);
   `,
 ];

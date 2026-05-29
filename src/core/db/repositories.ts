@@ -10,6 +10,8 @@ import type {
   EnvironmentInput,
   IgnoreRule,
   Project,
+  ProjectGroup,
+  ProjectGroupInput,
   ProjectInput,
   TransferHistoryEntry,
 } from "../../shared/domain";
@@ -162,6 +164,7 @@ interface ProjectRow {
   id: number;
   name: string;
   local_path: string;
+  group_id: number | null;
   default_environment_id: number | null;
   upload_on_save: number;
   save_before_upload: number;
@@ -184,6 +187,7 @@ function toProject(r: ProjectRow): Project {
     id: r.id,
     name: r.name,
     localPath: r.local_path,
+    groupId: r.group_id,
     defaultEnvironmentId: r.default_environment_id,
     uploadOnSave: bool(r.upload_on_save),
     saveBeforeUpload: bool(r.save_before_upload),
@@ -223,16 +227,17 @@ export class ProjectsRepo {
     const res = this.db
       .query(
         `INSERT INTO projects
-         (name, local_path, default_environment_id, upload_on_save,
+         (name, local_path, group_id, default_environment_id, upload_on_save,
           save_before_upload, watch_enabled, confirm_overwrite_newer,
           confirm_sync, confirm_downloads, sync_down_on_open, sync_skip_deletes,
           sync_same_age, file_permissions, dir_permissions, allow_config_upload,
           created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         input.name,
         input.localPath,
+        input.groupId,
         input.defaultEnvironmentId,
         int(input.uploadOnSave),
         int(input.saveBeforeUpload),
@@ -256,16 +261,18 @@ export class ProjectsRepo {
     this.db
       .query(
         `UPDATE projects SET
-          name=?, local_path=?, default_environment_id=?, upload_on_save=?,
-          save_before_upload=?, watch_enabled=?, confirm_overwrite_newer=?,
-          confirm_sync=?, confirm_downloads=?, sync_down_on_open=?,
-          sync_skip_deletes=?, sync_same_age=?, file_permissions=?,
-          dir_permissions=?, allow_config_upload=?, updated_at=?
+          name=?, local_path=?, group_id=?, default_environment_id=?,
+          upload_on_save=?, save_before_upload=?, watch_enabled=?,
+          confirm_overwrite_newer=?, confirm_sync=?, confirm_downloads=?,
+          sync_down_on_open=?, sync_skip_deletes=?, sync_same_age=?,
+          file_permissions=?, dir_permissions=?, allow_config_upload=?,
+          updated_at=?
          WHERE id=?`,
       )
       .run(
         input.name,
         input.localPath,
+        input.groupId,
         input.defaultEnvironmentId,
         int(input.uploadOnSave),
         int(input.saveBeforeUpload),
@@ -285,8 +292,77 @@ export class ProjectsRepo {
     return this.get(id)!;
   }
 
+  /** Assign (or clear, with null) a project's sidebar group. */
+  setGroup(id: number, groupId: number | null): void {
+    this.db
+      .query("UPDATE projects SET group_id = ?, updated_at = ? WHERE id = ?")
+      .run(groupId, now(), id);
+  }
+
   delete(id: number): void {
     this.db.query("DELETE FROM projects WHERE id = ?").run(id);
+  }
+}
+
+/* --------------------------- project groups ----------------------------- */
+
+interface ProjectGroupRow {
+  id: number;
+  name: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+function toGroup(r: ProjectGroupRow): ProjectGroup {
+  return {
+    id: r.id,
+    name: r.name,
+    sortOrder: r.sort_order,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+export class ProjectGroupsRepo {
+  constructor(private db: Database) {}
+
+  list(): ProjectGroup[] {
+    return (
+      this.db
+        .query("SELECT * FROM project_groups ORDER BY sort_order, name")
+        .all() as ProjectGroupRow[]
+    ).map(toGroup);
+  }
+
+  get(id: number): ProjectGroup | null {
+    const row = this.db
+      .query("SELECT * FROM project_groups WHERE id = ?")
+      .get(id) as ProjectGroupRow | null;
+    return row ? toGroup(row) : null;
+  }
+
+  create(input: ProjectGroupInput): ProjectGroup {
+    const ts = now();
+    const res = this.db
+      .query(
+        `INSERT INTO project_groups (name, sort_order, created_at, updated_at)
+         VALUES (?,?,?,?)`,
+      )
+      .run(input.name, input.sortOrder, ts, ts);
+    return this.get(Number(res.lastInsertRowid))!;
+  }
+
+  update(id: number, input: ProjectGroupInput): ProjectGroup {
+    this.db
+      .query("UPDATE project_groups SET name=?, sort_order=?, updated_at=? WHERE id=?")
+      .run(input.name, input.sortOrder, now(), id);
+    return this.get(id)!;
+  }
+
+  delete(id: number): void {
+    // ON DELETE SET NULL re-homes member projects to "ungrouped".
+    this.db.query("DELETE FROM project_groups WHERE id = ?").run(id);
   }
 }
 

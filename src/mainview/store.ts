@@ -8,10 +8,12 @@ import { create } from "zustand";
 import { api, onMessage } from "./lib/rpc";
 import type {
   Connection,
+  ConnectionState,
   Environment,
   FileEntry,
   LogLine,
   Project,
+  ProjectGroup,
   SessionState,
   TransferJob,
 } from "@shared/domain";
@@ -88,12 +90,15 @@ async function restoreSession(
 interface AppState {
   connections: Connection[];
   projects: Project[];
+  groups: ProjectGroup[];
   environments: Environment[];
 
   activeProject: Project | null;
   activeConnectionId: number | null;
   activeConnection: Connection | null;
   activeEnvironmentId: number | null;
+  /** Live per-connection link state (from the pool, via connection:state). */
+  connectionStates: Record<number, ConnectionState>;
 
   /** Project mapping. mapped === true means panes are root-locked + mirrored. */
   mapped: boolean;
@@ -110,8 +115,16 @@ interface AppState {
   init: () => Promise<void>;
   refreshConnections: () => Promise<void>;
   refreshProjects: () => Promise<void>;
+  refreshGroups: () => Promise<void>;
+
+  createGroup: (name: string) => Promise<void>;
+  renameGroup: (id: number, name: string) => Promise<void>;
+  deleteGroup: (id: number) => Promise<void>;
+  setProjectGroup: (projectId: number, groupId: number | null) => Promise<void>;
 
   openProject: (project: Project) => Promise<void>;
+  /** Drop the active project's live link (lazy reconnect on next access). */
+  disconnect: () => Promise<void>;
 
   /** Enter a directory entry (mapped: mirror both panes; free: that pane). */
   enter: (pane: Pane, entry: FileEntry) => Promise<void>;
@@ -131,11 +144,13 @@ interface AppState {
 export const useStore = create<AppState>((set, get) => ({
   connections: [],
   projects: [],
+  groups: [],
   environments: [],
   activeProject: null,
   activeConnectionId: null,
   activeConnection: null,
   activeEnvironmentId: null,
+  connectionStates: {},
   mapped: false,
   localRoot: "",
   remoteRoot: "",
@@ -170,6 +185,11 @@ export const useStore = create<AppState>((set, get) => ({
       if (st.activeConnectionId && up.includes(job.kind)) void st.refreshPane("remote");
     });
     onMessage("transferError", (e) => pushLog("error", `Transfer failed: ${e.error}`));
+    onMessage("connectionState", ({ connectionId, state }) => {
+      set((s) => ({
+        connectionStates: { ...s.connectionStates, [connectionId]: state },
+      }));
+    });
     onMessage("watchEvent", (e) => {
       if (e.action === "upload") pushLog("info", `Watch: uploading ${e.path}`);
     });
@@ -177,7 +197,11 @@ export const useStore = create<AppState>((set, get) => ({
       set((s) => ({ logs: [...s.logs.slice(-499), line] }));
     });
 
-    await Promise.all([get().refreshConnections(), get().refreshProjects()]);
+    await Promise.all([
+      get().refreshConnections(),
+      get().refreshProjects(),
+      get().refreshGroups(),
+    ]);
     const transfers = await api.listTransfers({});
     set({ transfers });
     const saved = await api.getSession({});
@@ -189,6 +213,26 @@ export const useStore = create<AppState>((set, get) => ({
   },
   refreshProjects: async () => {
     set({ projects: await api.listProjects({}) });
+  },
+  refreshGroups: async () => {
+    set({ groups: await api.listGroups({}) });
+  },
+
+  createGroup: async (name) => {
+    await api.createGroup({ name });
+    await get().refreshGroups();
+  },
+  renameGroup: async (id, name) => {
+    await api.renameGroup({ id, name });
+    await get().refreshGroups();
+  },
+  deleteGroup: async (id) => {
+    await api.deleteGroup({ id });
+    await Promise.all([get().refreshGroups(), get().refreshProjects()]);
+  },
+  setProjectGroup: async (projectId, groupId) => {
+    await api.setProjectGroup({ projectId, groupId });
+    await get().refreshProjects();
   },
 
   openProject: async (project) => {
@@ -224,6 +268,12 @@ export const useStore = create<AppState>((set, get) => ({
       relPath: "",
     });
     await get().refreshBoth();
+  },
+
+  disconnect: async () => {
+    const id = get().activeConnectionId;
+    if (id === null) return;
+    await api.disconnectConnection({ id });
   },
 
   enter: async (pane, entry) => {

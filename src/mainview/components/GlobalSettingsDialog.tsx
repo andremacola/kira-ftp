@@ -25,6 +25,8 @@ export function GlobalSettingsDialog() {
 
   const [menuBar, setMenuBar] = useState(true);
   const [notifySound, setNotifySound] = useState(true);
+  const [rememberSession, setRememberSession] = useState(true);
+  const [idleMinutes, setIdleMinutes] = useState("0");
   const [port, setPort] = useState("8911");
   const [portError, setPortError] = useState<string | null>(null);
   const [portSaved, setPortSaved] = useState(false);
@@ -63,6 +65,8 @@ export function GlobalSettingsDialog() {
     if (!open) return;
     void api.getShowInMenuBar({}).then(setMenuBar);
     void api.getNotifySound({}).then(setNotifySound);
+    void api.getRememberSession({}).then(setRememberSession);
+    void api.getIdleDisconnect({}).then((m) => setIdleMinutes(String(m)));
     void api.getControlPort({}).then((p) => setPort(String(p)));
     void refreshStatus();
     void refreshEditors();
@@ -163,6 +167,43 @@ export function GlobalSettingsDialog() {
                 void api.setNotifySound({ on: v });
               }}
             />
+          </Row>
+
+          <Row
+            title="Remember last session"
+            hint="Reopen the last project and folder after closing to the menu bar. A real Quit always clears it."
+          >
+            <Switch
+              checked={rememberSession}
+              onCheckedChange={(v) => {
+                setRememberSession(v);
+                void api.setRememberSession({ on: v });
+              }}
+            />
+          </Row>
+
+          <Row
+            title="Disconnect when idle"
+            hint="Drop idle FTP/SFTP connections after this long. They reconnect automatically on next use."
+          >
+            <Select
+              value={idleMinutes}
+              onValueChange={(v) => {
+                setIdleMinutes(v);
+                void api.setIdleDisconnect({ minutes: Number(v) });
+              }}
+            >
+              <SelectTrigger className="h-8 w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Never</SelectItem>
+                <SelectItem value="5">5 min</SelectItem>
+                <SelectItem value="15">15 min</SelectItem>
+                <SelectItem value="30">30 min</SelectItem>
+                <SelectItem value="60">60 min</SelectItem>
+              </SelectContent>
+            </Select>
           </Row>
 
           <div className="border-t border-border pt-3">

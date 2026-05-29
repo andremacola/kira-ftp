@@ -48,6 +48,19 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
       updateConnection: ({ id, input }) => ctx.connectionService.update(id, input),
       deleteConnection: ({ id }) => ctx.connectionService.delete(id),
       testConnection: ({ input }) => ctx.connectionService.test(input),
+      disconnectConnection: ({ id }) => ctx.connectionService.disconnect(id),
+
+      /* project groups */
+      listGroups: () => ctx.groups.list(),
+      createGroup: ({ name }) => ctx.groups.create({ name, sortOrder: 0 }),
+      renameGroup: ({ id, name }) => {
+        const g = ctx.groups.get(id);
+        if (!g) throw new Error(`Group ${id} not found`);
+        return ctx.groups.update(id, { name, sortOrder: g.sortOrder });
+      },
+      deleteGroup: ({ id }) => ctx.groups.delete(id),
+      setProjectGroup: ({ projectId, groupId }) =>
+        ctx.projects.setGroup(projectId, groupId),
 
       /* projects */
       listProjects: () => ctx.projects.list(),
@@ -231,6 +244,7 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
       },
       recentHistory: () => ctx.history.recent(),
       getSession: (): SessionState | null => {
+        if (!rememberSession()) return null;
         const raw = ctx.settings.get("session");
         if (!raw) return null;
         try {
@@ -239,7 +253,21 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
           return null;
         }
       },
-      setSession: ({ session }) => ctx.settings.set("session", JSON.stringify(session)),
+      setSession: ({ session }) => {
+        if (!rememberSession()) return;
+        ctx.settings.set("session", JSON.stringify(session));
+      },
+      getRememberSession: () => rememberSession(),
+      setRememberSession: ({ on }) => {
+        ctx.settings.setBool("rememberSession", on);
+        if (!on) ctx.settings.delete("session");
+      },
+      getIdleDisconnect: () => Math.round(ctx.idleDisconnectMs() / 60_000),
+      setIdleDisconnect: ({ minutes }) => {
+        const m = Number.isFinite(minutes) && minutes > 0 ? Math.floor(minutes) : 0;
+        ctx.settings.set("idleDisconnectMinutes", String(m));
+        ctx.pool.setIdleTimeout(m * 60_000);
+      },
       getShowInMenuBar: () => showInMenuBar(),
       setShowInMenuBar: ({ on }) => {
         ctx.settings.setBool("showInMenuBar", on);
@@ -404,6 +432,11 @@ let win: BrowserWindow | null = null;
 /** True = live in the menu bar; false = behave as a normal Dock-only app. */
 function showInMenuBar(): boolean {
   return ctx.settings.getBool("showInMenuBar", true);
+}
+
+/** True = persist/restore the last open session across close-to-menu-bar. */
+function rememberSession(): boolean {
+  return ctx.settings.getBool("rememberSession", true);
 }
 
 function setDock(visible: boolean): void {

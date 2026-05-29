@@ -195,6 +195,10 @@ export class ControlServer {
     const target = this.resolver.resolve(body.path);
     if (!target) {
       this.log("warn", `CLI ${body.action}: no project contains ${body.path}`);
+      this.ctx.bus.emit("notify", {
+        title: "Kira FTP — no project",
+        body: `No project contains ${body.path}`,
+      });
       return this.json(
         { ok: false, error: `No project contains: ${body.path}` },
         404,

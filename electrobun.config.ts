@@ -7,7 +7,7 @@ export default {
   app: {
     name: "Kira FTP",
     identifier: "com.kira.ftp",
-    version: "0.3.0",
+    version: "0.4.0",
   },
   // Closing the window keeps the app alive in the menu bar; the tray's
   // "Quit Kira FTP" is the way to fully exit.
