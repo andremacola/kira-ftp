@@ -5,3 +5,9 @@
  */
 declare module "three";
 declare module "@babylonjs/core";
+
+/** Vite asset imports (png logo, etc.). */
+declare module "*.png" {
+  const src: string;
+  export default src;
+}

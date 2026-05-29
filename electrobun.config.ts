@@ -15,8 +15,8 @@ export default {
       "dist/assets": "views/mainview/assets",
     },
     watchIgnore: ["dist/**"],
-    mac: { bundleCEF: false, icons: "assets/icon.iconset" },
-    linux: { bundleCEF: false, icon: "assets/icon.iconset/icon_512x512.png" },
+    mac: { bundleCEF: false, icons: "assets/kira-ftp-macos.icon" },
+    linux: { bundleCEF: false },
     win: { bundleCEF: false },
   },
 } satisfies ElectrobunConfig;
