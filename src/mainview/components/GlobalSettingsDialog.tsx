@@ -34,9 +34,15 @@ export function GlobalSettingsDialog() {
     Array<{ id: string; name: string; detected: boolean; installed: boolean }>
   >([]);
   const [editorMsg, setEditorMsg] = useState<Record<string, string>>({});
+  const [cli, setCli] = useState<{ installed: boolean; path: string | null }>({
+    installed: false,
+    path: null,
+  });
+  const [cliMsg, setCliMsg] = useState<string | null>(null);
 
   const refreshStatus = () => api.getControlStatus({}).then(setStatus);
   const refreshEditors = () => api.editorStatus({}).then(setEditors);
+  const refreshCli = () => api.cliStatus({}).then(setCli);
 
   useEffect(() => {
     if (!open) return;
@@ -45,10 +51,24 @@ export function GlobalSettingsDialog() {
     void api.getControlPort({}).then((p) => setPort(String(p)));
     void refreshStatus();
     void refreshEditors();
+    void refreshCli();
     setEditorMsg({});
+    setCliMsg(null);
     setPortError(null);
     setPortSaved(false);
   }, [open]);
+
+  const installCli = async () => {
+    setCliMsg(null);
+    try {
+      const res = await api.installCli({});
+      if (res.cancelled) return;
+      setCliMsg(res.message);
+      await Promise.all([refreshCli(), refreshEditors()]);
+    } catch (e) {
+      setCliMsg(`Failed: ${(e as Error).message}`);
+    }
+  };
 
   const installEditor = async (id: string) => {
     try {
@@ -163,10 +183,40 @@ export function GlobalSettingsDialog() {
           </div>
 
           <div className="border-t border-border pt-3">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <Label>Command-line tool (kira)</Label>
+              {cli.installed && (
+                <span className="flex shrink-0 items-center gap-1 text-xs text-emerald-500">
+                  <Check className="size-3.5" /> Installed
+                </span>
+              )}
+            </div>
+            <p className="mb-2 text-[11px] text-muted-foreground">
+              A small <code>kira</code> script editors call to upload/download/sync the
+              current file. Pick a folder on your PATH (e.g. <code>~/.local/bin</code>).
+            </p>
+            {cli.installed && cli.path && (
+              <p className="mb-1.5 truncate font-mono text-[11px] text-muted-foreground" title={cli.path}>
+                {cli.path}
+              </p>
+            )}
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => void installCli()}>
+                {cli.installed ? "Reinstall / move…" : "Install CLI…"}
+              </Button>
+              {cliMsg && (
+                <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground" title={cliMsg}>
+                  {cliMsg}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="border-t border-border pt-3">
             <Label>Editor integration</Label>
             <p className="mb-2 text-[11px] text-muted-foreground">
-              Install shortcuts that call the <code>kira</code> CLI (upload/download/sync
-              the current file). Requires <code>kira</code> on your PATH.
+              Install shortcuts that call the <code>kira</code> CLI to upload/download/sync
+              the current file. Install the CLI above first.
             </p>
             <div className="grid gap-1.5">
               {editors.map((ed) => (

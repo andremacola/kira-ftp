@@ -80,7 +80,7 @@ export class AppContext {
   readonly sync: SyncService;
   readonly watcher: WatcherService;
   readonly vcs: VcsService;
-  readonly editors = new EditorIntegrationService();
+  readonly editors: EditorIntegrationService;
 
   constructor(dbPath = databasePath()) {
     this.db = openDatabase(dbPath);
@@ -97,6 +97,12 @@ export class AppContext {
     this.transfers = new TransferManager(this.pool, this.rclone, this.history, this.bus);
     this.sync = new SyncService(this.rclone);
     this.vcs = new VcsService();
+    // Editor integration persists the installed CLI path in app settings, so
+    // editor configs can reference it by absolute path.
+    this.editors = new EditorIntegrationService(undefined, {
+      get: () => this.settings.get("cliPath"),
+      set: (p) => this.settings.set("cliPath", p),
+    });
     this.watcher = new WatcherService({
       upload: (conn, localPath, remotePath) =>
         this.transfers.enqueueUpload(conn, localPath, remotePath),

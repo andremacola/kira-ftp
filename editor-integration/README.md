@@ -6,9 +6,16 @@ project owns that path and performs the action (launching the app if needed).
 
 ## 1. Install the CLI
 
+Easiest: open **Kira FTP → Settings (gear) → Command-line tool** and click
+**Install CLI…**, then pick a folder on your PATH (e.g. `~/.local/bin`). This
+writes a tiny `kira` shell script (no build needed) and the editor-integration
+buttons in the same screen will wire it up by absolute path.
+
+Manual alternative (standalone binary):
+
 ```bash
-bun run build:cli          # produces dist-cli/kira
-sudo cp dist-cli/kira /usr/local/bin/kira   # or anywhere on your PATH
+bun run build:cli          # produces dist-cli/kira (~63MB, bundles Bun)
+cp dist-cli/kira ~/.local/bin/kira
 ```
 
 If Kira FTP is not in `/Applications`, set `KIRA_APP_PATH` to the `.app` so the

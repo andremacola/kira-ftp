@@ -223,6 +223,15 @@ export type KiraRPC = {
         params: { id: string };
         response: { ok: boolean; alreadyInstalled: boolean; message: string };
       };
+      /* kira CLI */
+      cliStatus: {
+        params: Record<string, never>;
+        response: { installed: boolean; path: string | null };
+      };
+      installCli: {
+        params: Record<string, never>;
+        response: { ok: boolean; cancelled?: boolean; message: string };
+      };
       pickDirectory: { params: Record<string, never>; response: string | null };
       pickFile: { params: Record<string, never>; response: string | null };
       pickSftpConfig: { params: Record<string, never>; response: string | null };

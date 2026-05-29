@@ -56,16 +56,67 @@ interface VscodeFork {
   supportDir: string; // ~/Library/Application Support/<dir>
 }
 
+/** Persisted location of the installed `kira` CLI, so editor configs can use
+ *  its absolute path (apps launched from the Dock have a minimal PATH). */
+export interface CliLocation {
+  get(): string | null;
+  set(path: string): void;
+}
+
+export interface CliStatus {
+  installed: boolean;
+  path: string | null;
+}
+
 export class EditorIntegrationService {
   private home: string;
+  private cliLoc: CliLocation;
 
-  /** `home` is injectable so tests never touch the real user config. */
-  constructor(home: string = homedir()) {
+  /** `home`/`cliLoc` are injectable so tests never touch real config. */
+  constructor(home: string = homedir(), cliLoc?: CliLocation) {
     this.home = home;
+    this.cliLoc = cliLoc ?? memoryCliLocation();
   }
 
+  /** Absolute path to the installed CLI if known, else the bare name. */
   private kiraBin(): string {
-    return process.env.KIRA_CLI_PATH ?? "kira";
+    return this.cliLoc.get() ?? process.env.KIRA_CLI_PATH ?? "kira";
+  }
+
+  /* ------------------------------- CLI ---------------------------------- */
+
+  cliStatus(): CliStatus {
+    const path = this.cliLoc.get();
+    return { installed: path !== null && existsSync(path), path };
+  }
+
+  /**
+   * Install the `kira` CLI as a tiny shell script (curl-based) into `dir`.
+   * No build step, no 63MB binary: it reads the port/token files the app
+   * publishes and POSTs to the control server.
+   */
+  installCli(dir: string): InstallResult {
+    const target = join(dir, "kira");
+    try {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(target, CLI_SCRIPT.replace("__DATA_DIR__", this.appDataDir()), {
+        mode: 0o755,
+      });
+      this.cliLoc.set(target);
+      return {
+        ok: true,
+        alreadyInstalled: false,
+        message: `Installed to ${target}`,
+      };
+    } catch (e) {
+      return { ok: false, alreadyInstalled: false, message: (e as Error).message };
+    }
+  }
+
+  /** App data dir (where the control-port / control-token files live). */
+  private appDataDir(): string {
+    if (process.env.KIRA_DATA_DIR) return process.env.KIRA_DATA_DIR;
+    return join(this.home, "Library/Application Support/kira-ftp");
   }
 
   private appSupport(name: string): string {
@@ -294,6 +345,67 @@ export class EditorIntegrationService {
     return { ok: true, alreadyInstalled: false, message: "Sublime plugin + keybindings installed" };
   }
 }
+
+/** Fallback CLI location store for tests / when no persistent store is given. */
+function memoryCliLocation(): CliLocation {
+  let value: string | null = null;
+  return { get: () => value, set: (p) => void (value = p) };
+}
+
+/**
+ * The `kira` CLI as a self-contained POSIX shell script (no Bun runtime, no
+ * build). Reads the control port/token the app publishes and POSTs the command;
+ * launches the app if it isn't running. __DATA_DIR__ is baked in at install.
+ */
+const CLI_SCRIPT = `#!/bin/sh
+# kira — Kira FTP CLI (installed by the app). Triggers upload/download/sync of a
+# path; the app resolves which project owns it.
+#   kira <upload|download|sync-up|sync-down|sync> <path>
+set -eu
+DATA_DIR="__DATA_DIR__"
+APP_PATH="\${KIRA_APP_PATH:-/Applications/Kira FTP.app}"
+
+action="\${1:-}"; target="\${2:-}"
+case "$action" in
+  up) action=upload;; down) action=download;;
+  push) action=sync-up;; pull) action=sync-down;; sync) action=sync-both;;
+  upload|download|sync-up|sync-down|sync-both) ;;
+  *) echo "Usage: kira <upload|download|sync-up|sync-down|sync> <path>" >&2; exit 2;;
+esac
+[ -n "$target" ] || { echo "Missing <path>" >&2; exit 2; }
+
+# absolute path
+case "$target" in /*) ;; *) target="$(pwd)/$target";; esac
+
+read_file() { [ -f "$1" ] && cat "$1" || echo ""; }
+port() { p="$(read_file "$DATA_DIR/control-port")"; [ -n "$p" ] && echo "$p" || echo 8911; }
+token() { read_file "$DATA_DIR/control-token"; }
+
+ping() { curl -fsS --max-time 1 "http://127.0.0.1:$(port)/ping" >/dev/null 2>&1; }
+
+if ! ping; then
+  echo "Kira FTP is not running — launching…" >&2
+  open -g "$APP_PATH" 2>/dev/null || true
+  i=0; while [ $i -lt 40 ]; do ping && break; sleep 0.25; i=$((i+1)); done
+  ping || { echo "Could not reach Kira FTP (set KIRA_APP_PATH if needed)" >&2; exit 1; }
+fi
+
+TOKEN="$(token)"
+[ -n "$TOKEN" ] || { echo "Control token not found; open Kira FTP once." >&2; exit 1; }
+
+# JSON-encode the path (escape backslashes and quotes)
+esc=$(printf '%s' "$target" | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+resp=$(curl -fsS --max-time 600 -X POST \\
+  -H "Content-Type: application/json" -H "x-kira-token: $TOKEN" \\
+  -d "{\\"action\\":\\"$action\\",\\"path\\":\\"$esc\\"}" \\
+  "http://127.0.0.1:$(port)/command" 2>/dev/null) || {
+    echo "Kira FTP request failed" >&2; exit 1; }
+
+case "$resp" in
+  *'"ok":true'*) echo "✓ \${resp}";;
+  *) echo "✗ \${resp}" >&2; exit 1;;
+esac
+`;
 
 const SUBLIME_PLUGIN = `# kira-ftp integration for Sublime Text (installed by Kira FTP).
 import os, subprocess, sublime, sublime_plugin
