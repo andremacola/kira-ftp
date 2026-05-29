@@ -36,8 +36,9 @@ export class MenubarManager {
   init(): void {
     this.applyDockPreference();
     try {
-      // 22pt logical; the 22px PNGs are template images (black + alpha).
-      this.tray = new Tray({ image: IDLE_ICON, template: true, width: 22, height: 22 });
+      // Icons are 36px @144dpi = 18pt intrinsic. setTrayImage carries no size,
+      // so the intrinsic point-size must match this; keep createTray at 18 too.
+      this.tray = new Tray({ image: IDLE_ICON, template: true, width: 18, height: 18 });
       this.tray.setMenu(this.menu());
       this.tray.on("tray-clicked", () => this.onOpen());
     } catch {
