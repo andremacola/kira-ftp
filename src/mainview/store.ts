@@ -88,6 +88,7 @@ interface AppState {
 
   cancelTransfer: (jobId: string) => Promise<void>;
   clearFinished: () => Promise<void>;
+  clearLogs: () => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -280,4 +281,5 @@ export const useStore = create<AppState>((set, get) => ({
       ),
     }));
   },
+  clearLogs: () => set({ logs: [] }),
 }));

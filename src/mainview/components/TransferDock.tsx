@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { ChevronUp, ChevronDown, X, Trash2, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { ChevronUp, ChevronDown, X, Trash2, Copy, Check, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
 import { Badge } from "./ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useStore } from "../store";
 import { useUi } from "../ui-store";
-import { cn, formatBytes, formatSpeed } from "../lib/utils";
+import { cn, formatBytes, formatSpeed, formatTime } from "../lib/utils";
 import type { TransferJob, TransferStatus } from "@shared/domain";
 
 export function TransferDock() {
@@ -13,8 +14,23 @@ export function TransferDock() {
   const logs = useStore((s) => s.logs);
   const cancelTransfer = useStore((s) => s.cancelTransfer);
   const clearFinished = useStore((s) => s.clearFinished);
+  const clearLogs = useStore((s) => s.clearLogs);
   const focusLogSignal = useUi((s) => s.focusLogSignal);
   const [open, setOpen] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  const copyLogs = async () => {
+    const text = logs
+      .map((l) => `[${formatTime(Date.parse(l.at))}] ${l.level.toUpperCase()} ${l.message}`)
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
   const [tab, setTab] = useState<"transfers" | "log">("transfers");
 
   // External request (e.g. from global settings) to reveal the Log.
@@ -56,9 +72,34 @@ export function TransferDock() {
         </button>
         <div className="ml-auto flex items-center gap-1">
           {tab === "transfers" && (
-            <Button variant="ghost" size="icon-sm" onClick={() => void clearFinished()}>
-              <Trash2 />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon-sm" onClick={() => void clearFinished()}>
+                  <Trash2 />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Clear finished</TooltipContent>
+            </Tooltip>
+          )}
+          {tab === "log" && logs.length > 0 && (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" onClick={() => void copyLogs()}>
+                    {copied ? <Check className="text-emerald-500" /> : <Copy />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{copied ? "Copied" : "Copy logs"}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" onClick={clearLogs}>
+                    <Trash2 />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Clear logs</TooltipContent>
+              </Tooltip>
+            </>
           )}
           <Button variant="ghost" size="icon-sm" onClick={() => setOpen((o) => !o)}>
             {open ? <ChevronDown /> : <ChevronUp />}
@@ -79,7 +120,7 @@ export function TransferDock() {
           ) : logs.length === 0 ? (
             <Empty label="No log output" />
           ) : (
-            <div className="font-mono text-[11px] leading-relaxed">
+            <div className="select-text font-mono text-[11px] leading-relaxed [-webkit-user-select:text]">
               {logs.map((l, i) => (
                 <div
                   key={`${l.at}-${i}`}
