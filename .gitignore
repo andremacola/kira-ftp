@@ -33,3 +33,6 @@ docs/agent-sessions/*.txt
 
 # Compiled CLI binary
 dist-cli/
+
+# Local handoff notes
+ROADMAP.md
