@@ -107,13 +107,24 @@ body {
   overflow: hidden;
 }
 
-/* CodeMirror MergeView (diff) must fill its dialog container. */
+/* CodeMirror MergeView (diff) must fill its dialog container and scroll. The
+   full height chain has to be set or the inner .cm-scroller never bounds and
+   tall files get clipped: host -> mergeView -> editors -> editor -> .cm-editor. */
 .cm-mergeView,
 .cm-mergeViewEditors {
   height: 100%;
+  min-height: 0;
+}
+.cm-mergeViewEditor {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 .cm-mergeView .cm-editor {
   height: 100%;
+}
+.cm-mergeView .cm-scroller {
+  overflow: auto;
 }
 
 /* Thin, unobtrusive scrollbars to match a native macOS feel. */
