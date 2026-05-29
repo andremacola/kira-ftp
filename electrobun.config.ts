@@ -15,8 +15,12 @@ export default {
       "dist/assets": "views/mainview/assets",
     },
     watchIgnore: ["dist/**"],
-    mac: { bundleCEF: false, icons: "assets/kira-ftp-macos.icon" },
-    linux: { bundleCEF: false },
+    // Use a prebuilt .iconset (converted via iconutil) instead of an Icon
+    // Composer .icon: avoids invoking actool, whose Xcode media frameworks emit
+    // noisy (harmless) dyld warnings on every build. Art is inset to ~82% of the
+    // canvas so the Dock icon matches the standard macOS size.
+    mac: { bundleCEF: false, icons: "assets/icon.iconset" },
+    linux: { bundleCEF: false, icon: "assets/icon.iconset/icon_512x512.png" },
     win: { bundleCEF: false },
   },
 } satisfies ElectrobunConfig;
