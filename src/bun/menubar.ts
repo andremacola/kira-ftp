@@ -21,6 +21,9 @@ const FRAME_MS = 110;
 export class MenubarManager {
   private tray: Tray | null = null;
   private active = new Map<string, TransferJob>();
+  /** Interactive remote ops in flight (list/stat/mkdir/rename/edit/…). */
+  private remoteBusy = false;
+  private remoteOffTimer: ReturnType<typeof setTimeout> | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private frame = 0;
 
@@ -47,6 +50,24 @@ export class MenubarManager {
 
     this.ctx.bus.on("transfer:update", (job) => this.track(job));
     this.ctx.bus.on("transfer:done", (job) => this.complete(job));
+    this.ctx.bus.on("remote:activity", ({ busy }) => {
+      if (busy) {
+        if (this.remoteOffTimer) {
+          clearTimeout(this.remoteOffTimer);
+          this.remoteOffTimer = null;
+        }
+        this.remoteBusy = true;
+        this.refreshAnimation();
+      } else {
+        // brief hold so fast back-to-back ops don't flicker the icon
+        if (this.remoteOffTimer) clearTimeout(this.remoteOffTimer);
+        this.remoteOffTimer = setTimeout(() => {
+          this.remoteBusy = false;
+          this.remoteOffTimer = null;
+          this.refreshAnimation();
+        }, 300);
+      }
+    });
   }
 
   private menu() {
@@ -109,7 +130,7 @@ export class MenubarManager {
   }
 
   private refreshAnimation(): void {
-    const busy = this.active.size > 0;
+    const busy = this.active.size > 0 || this.remoteBusy;
     if (busy && !this.timer) {
       this.frame = 0;
       this.timer = setInterval(() => this.tick(), FRAME_MS);
@@ -128,7 +149,9 @@ export class MenubarManager {
 
   dispose(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.remoteOffTimer) clearTimeout(this.remoteOffTimer);
     this.timer = null;
+    this.remoteOffTimer = null;
     this.tray?.remove();
     this.tray = null;
   }

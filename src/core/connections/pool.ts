@@ -23,6 +23,22 @@ export class ConnectionPool {
   private connecting = new Map<number, Promise<Transport>>();
   /** Per-connection serialization tail for non-multiplexing transports. */
   private queues = new Map<number, Promise<unknown>>();
+  /** Count of in-flight withTransport ops, for the activity indicator. */
+  private inFlight = 0;
+  private onActivity: ((busy: boolean) => void) | null = null;
+
+  /** Subscribe to remote-activity changes (true when any op is in flight). */
+  setActivityListener(fn: (busy: boolean) => void): void {
+    this.onActivity = fn;
+  }
+
+  private enter(): void {
+    if (this.inFlight++ === 0) this.onActivity?.(true);
+  }
+  private leave(): void {
+    if (--this.inFlight === 0) this.onActivity?.(false);
+    if (this.inFlight < 0) this.inFlight = 0;
+  }
 
   /** Get a live transport, sharing a single connect across concurrent calls. */
   private getTransport(conn: Connection): Promise<Transport> {
@@ -58,9 +74,12 @@ export class ConnectionPool {
     conn: Connection,
     fn: (t: Transport) => Promise<T>,
   ): Promise<T> {
+    this.enter();
+    const done = () => this.leave();
     if (conn.type === "sftp") {
-      const transport = await this.getTransport(conn);
-      return fn(transport);
+      const p = this.getTransport(conn).then(fn);
+      p.then(done, done);
+      return p;
     }
     // serialize FTP/FTPS ops on the same connection
     const prev = this.queues.get(conn.id) ?? Promise.resolve();
@@ -68,6 +87,7 @@ export class ConnectionPool {
       const transport = await this.getTransport(conn);
       return fn(transport);
     });
+    run.then(done, done);
     // keep the chain alive even if this op throws
     this.queues.set(
       conn.id,

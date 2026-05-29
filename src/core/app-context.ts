@@ -101,6 +101,10 @@ export class AppContext {
       onEvent: (projectId, path, action) =>
         this.bus.emit("watch:event", { projectId, path, action }),
     });
+
+    // Surface interactive remote activity (list/stat/mkdir/rename/…) so the
+    // menubar shows the spinner during browsing/edits, not only transfers.
+    this.pool.setActivityListener((busy) => this.bus.emit("remote:activity", { busy }));
   }
 
   /** Resolve the active connection + remote path for a project's environment. */

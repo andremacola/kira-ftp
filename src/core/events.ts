@@ -14,6 +14,8 @@ export interface AppEvents {
   "transfer:error": { jobId: string; error: string };
   "connection:state": { connectionId: number; state: ConnectionState };
   "watch:event": { projectId: number; path: string; action: "upload" | "skip" };
+  /** True when any interactive remote op (list/stat/mkdir/…) is in flight. */
+  "remote:activity": { busy: boolean };
   log: LogLine;
 }
 
