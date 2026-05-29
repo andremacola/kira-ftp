@@ -141,7 +141,7 @@ export function GlobalSettingsDialog() {
           <DialogDescription>Application-wide preferences.</DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <Row title="Show icon in the Dock" hint="Turn off to run from the menu bar only.">
             <Switch
               checked={dockVisible}

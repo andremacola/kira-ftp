@@ -43,11 +43,10 @@ export class MenubarManager {
       // so the intrinsic point-size must match this; keep createTray at 18 too.
       this.tray = new Tray({ image: IDLE_ICON, template: true, width: 18, height: 18 });
       this.tray.setMenu(this.menu());
-      // Tray menu items report their `action` via the same tray-clicked event;
-      // a bare icon click has an empty action. Dispatch accordingly.
+      // The clicked menu item's action arrives as e.data.action (per Electrobun
+      // docs); an empty string means the tray icon itself was clicked.
       this.tray.on("tray-clicked", (e) => {
-        const action = (e as { action?: string } | undefined)?.action;
-        console.log("[tray] clicked, action =", JSON.stringify(action));
+        const action = (e as { data?: { action?: string } } | undefined)?.data?.action;
         if (action === "quit") this.onQuit();
         else if (action === "rmate-toggle") {
           this.ctx.rmate.setEnabled(!this.ctx.rmate.isRunning());
