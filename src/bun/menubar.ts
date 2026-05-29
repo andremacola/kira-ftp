@@ -34,27 +34,8 @@ export class MenubarManager {
     private onQuit: () => void,
   ) {}
 
-  /** Create the tray. Dock visibility is driven by window visibility (see index). */
+  /** Subscribe to activity events. The tray itself is added via setVisible(). */
   init(): void {
-    try {
-      // Icons are 36px @144dpi = 18pt intrinsic. setTrayImage carries no size,
-      // so the intrinsic point-size must match this; keep createTray at 18 too.
-      this.tray = new Tray({ image: IDLE_ICON, template: true, width: 18, height: 18 });
-      this.tray.setMenu(this.menu());
-      // The clicked menu item's action arrives as e.data.action (per Electrobun
-      // docs); an empty string means the tray icon itself was clicked.
-      this.tray.on("tray-clicked", (e) => {
-        const action = (e as { data?: { action?: string } } | undefined)?.data?.action;
-        if (action === "quit") this.onQuit();
-        else if (action === "rmate-toggle") {
-          this.ctx.rmate.setEnabled(!this.ctx.rmate.isRunning());
-          this.tray?.setMenu(this.menu()); // refresh the label
-        } else this.onOpen();
-      });
-    } catch {
-      this.tray = null; // tray unavailable (rare) — app still works
-    }
-
     this.ctx.bus.on("transfer:update", (job) => this.track(job));
     this.ctx.bus.on("transfer:done", (job) => this.complete(job));
     this.ctx.bus.on("remote:activity", ({ busy }) => {
@@ -75,6 +56,38 @@ export class MenubarManager {
         }, 300);
       }
     });
+  }
+
+  /** Add or remove the tray icon (driven by the "Show in menu bar" setting). */
+  setVisible(visible: boolean): void {
+    if (visible) {
+      this.createTray();
+    } else {
+      this.tray?.remove();
+      this.tray = null;
+    }
+  }
+
+  private createTray(): void {
+    if (this.tray) return;
+    try {
+      // Icons are 36px @144dpi = 18pt intrinsic. setTrayImage carries no size,
+      // so the intrinsic point-size must match this; keep createTray at 18 too.
+      this.tray = new Tray({ image: IDLE_ICON, template: true, width: 18, height: 18 });
+      this.tray.setMenu(this.menu());
+      // The clicked menu item's action arrives as e.data.action (per Electrobun
+      // docs); an empty string means the tray icon itself was clicked.
+      this.tray.on("tray-clicked", (e) => {
+        const action = (e as { data?: { action?: string } } | undefined)?.data?.action;
+        if (action === "quit") this.onQuit();
+        else if (action === "rmate-toggle") {
+          this.ctx.rmate.setEnabled(!this.ctx.rmate.isRunning());
+          this.tray?.setMenu(this.menu()); // refresh the label
+        } else this.onOpen();
+      });
+    } catch {
+      this.tray = null; // tray unavailable (rare) — app still works
+    }
   }
 
   private menu() {

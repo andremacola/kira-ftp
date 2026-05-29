@@ -196,11 +196,6 @@ export type KiraRPC = {
       importSublimeConfig: { params: { localPath: string }; response: Project };
       recentHistory: { params: Record<string, never>; response: TransferHistoryEntry[] };
 
-      /* custom window controls (titleBarStyle hidden) */
-      windowClose: { params: Record<string, never>; response: void };
-      windowMinimize: { params: Record<string, never>; response: void };
-      windowZoom: { params: Record<string, never>; response: void };
-
       /* global app preferences */
       getShowInMenuBar: { params: Record<string, never>; response: boolean };
       setShowInMenuBar: { params: { on: boolean }; response: void };

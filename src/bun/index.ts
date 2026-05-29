@@ -230,18 +230,14 @@ const rpc = BrowserView.defineRPC<KiraRPC>({
         return ctx.projects.get(project.id)!;
       },
       recentHistory: () => ctx.history.recent(),
-      windowClose: () => {
-        hideWindow();
-      },
-      windowMinimize: () => {
-        win?.minimize();
-      },
-      windowZoom: () => {
-        if (win?.isMaximized()) win.unmaximize();
-        else win?.maximize();
-      },
       getShowInMenuBar: () => showInMenuBar(),
-      setShowInMenuBar: ({ on }) => ctx.settings.setBool("showInMenuBar", on),
+      setShowInMenuBar: ({ on }) => {
+        ctx.settings.setBool("showInMenuBar", on);
+        // Apply immediately: add/remove the tray, and make sure a Dock-only app
+        // keeps its Dock icon.
+        menubar.setVisible(on);
+        if (!on) setDock(true);
+      },
       getNotifySound: () => menubar.isNotifySound(),
       setNotifySound: ({ on }) => menubar.setNotifySound(on),
       getControlPort: () => control.port(),
@@ -382,14 +378,16 @@ function initialFrame(): Frame {
 }
 
 /**
- * The window is created once and kept alive; the custom (red) close button
- * HIDES it rather than destroying it, so its state is preserved across
- * open/close. "Show in menu bar" (default on) decides what hiding means:
- *   on  -> app drops to the menu bar (Dock icon hidden, Accessory mode)
- *   off -> a normal Dock app; hiding the window quits the app
- * The Dock icon follows window visibility (OrbStack-style): while the window is
- * visible the app is Regular (so minimize goes to the app icon), and when
- * hidden it goes Accessory (if menu-bar mode) — keeping the tray always present.
+ * Native traffic lights (titleBarStyle "hiddenInset"). The red button is the
+ * real macOS close — it destroys the window and can't be intercepted — so the
+ * window is recreated by "Open Kira FTP" when needed. "Show in menu bar"
+ * (default on) decides what closing means:
+ *   on  -> app stays in the menu bar (Dock icon hidden, Accessory mode)
+ *   off -> a normal Dock app; closing the last window quits
+ * The Dock icon follows window visibility (OrbStack-style): a live window is
+ * Regular (so minimize goes to the app icon), and once closed in menu-bar mode
+ * the app drops to Accessory. exitOnLastWindowClosed is off so the native close
+ * never quits us behind our back.
  */
 let win: BrowserWindow | null = null;
 
@@ -411,9 +409,9 @@ function createMainWindow(): void {
     title: "Kira FTP",
     url,
     frame: initialFrame(),
-    // Frameless: we render our own traffic-light controls in the top bar so the
-    // close button can hide (preserve state) instead of destroy.
-    titleBarStyle: "hidden",
+    // hiddenInset: native traffic lights over a full-size content view (the top
+    // bar draws under them and is left-padded to clear the buttons).
+    titleBarStyle: "hiddenInset",
     rpc,
   });
   setDock(true); // window visible -> Regular (Dock icon, native minimize)
@@ -435,9 +433,20 @@ function createMainWindow(): void {
   };
   win.on("move", remember);
   win.on("resize", remember);
+
+  // Native close fires this (per-window, before the global handler). The window
+  // is gone; either quit or drop to the menu bar.
+  win.on("close", () => {
+    win = null;
+    if (!showInMenuBar()) {
+      void gracefulShutdown().finally(() => process.exit(0));
+      return;
+    }
+    setDock(false); // no window -> Accessory (menu-bar only)
+  });
 }
 
-/** Show (and focus) the window, recreating it only if it was never created. */
+/** Show (and focus) the window, recreating it if it was closed. */
 function showWindow(): void {
   if (!win) {
     createMainWindow();
@@ -446,18 +455,6 @@ function showWindow(): void {
   }
   win?.activate();
   setDock(true);
-}
-
-/** Hide the window (custom close). Quits if not running in the menu bar. */
-function hideWindow(): void {
-  const f = win?.getFrame?.();
-  if (f) ctx.settings.set("windowFrame", JSON.stringify(f));
-  if (!showInMenuBar()) {
-    void gracefulShutdown().finally(() => process.exit(0));
-    return;
-  }
-  win?.hide();
-  setDock(false); // no visible window -> Accessory (menu-bar only)
 }
 
 // Menubar presence: tray icon that pulses during transfers, notifies on
@@ -469,6 +466,7 @@ const menubar = new MenubarManager(
   () => void gracefulShutdown().finally(() => process.exit(0)),
 );
 menubar.init();
+if (showInMenuBar()) menubar.setVisible(true);
 showWindow();
 
 // Graceful shutdown: signals can await async cleanup; the bare exit handler
